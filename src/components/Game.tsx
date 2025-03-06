@@ -13,16 +13,9 @@ import {
 } from '@/types/gameTypes';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-
-// Canvas dimensions
-const CANVAS_WIDTH = 800;
-const CANVAS_HEIGHT = 600;
-
-// Game constants
-const INITIAL_SPAWN_RATE = 10; // passengers per minute (changed from 100 to a more reasonable value)
-const GAME_TICK_MS = 100; // Update game state every 100ms
-const SECURITY_LANE_QUEUE_CAPACITY = 10; // Maximum number of passengers in a security lane queue
-const HISTOGRAM_INTERVAL = 30; // Seconds per histogram bar
+import { formatTime } from '@/lib/game-utils';
+import { GAME_TICK_MS, HISTOGRAM_INTERVAL, INITIAL_SPAWN_RATE, MAX_QUEUE_DISPLAY_LENGTH, SECURITY_LANE_QUEUE_CAPACITY } from '@/lib/game-constants';
+import { Histogram } from '@/components/Histogram';
 
 // Initialize a new game state
 const initializeGameState = (): GameState => {
@@ -59,6 +52,22 @@ const initializeGameState = (): GameState => {
       sex: 'female',
       is_available: true,
       current_passenger_id: null
+    },
+    {
+      id: 'agent_5',
+      name: 'Agent Rodriguez',
+      rank: 'jnr',
+      sex: 'female',
+      is_available: true,
+      current_passenger_id: null
+    },
+    {
+      id: 'agent_6',
+      name: 'Agent Kim',
+      rank: 'mid',
+      sex: 'male',
+      is_available: true,
+      current_passenger_id: null
     }
   ];
 
@@ -68,20 +77,21 @@ const initializeGameState = (): GameState => {
     name,
     type,
     is_operational: true,
-    items_per_minute: type === 'bag' ? 10 : 15, // Bags are slower to scan than people
+    items_per_minute: type === 'bag' ? 10 : 0, // Only used for bag scanners now
     current_items: [],
-    capacity: type === 'bag' ? 3 : 2, // Bag scanner can handle more items simultaneously
+    capacity: type === 'bag' ? 3 : 1, // Bag scanner can handle more items simultaneously
     current_scan_progress: {},
     scan_accuracy: 95,
     last_processed_time: Date.now(),
-    waiting_items: [] // Queue for items waiting to be scanned
+    waiting_items: [],
+    current_scan_time_needed: {},
   });
 
   // Create initial security lanes
   const securityLanes: SecurityLane[] = [
     {
       id: 'lane_1',
-      name: 'Lane 1',
+      name: 'LANE 1',
       security_agents: [securityAgents[0], securityAgents[1]],
       passenger_queue: new Queue(),
       bag_scanner: createScanner('bag_scanner_1', 'Bag Scanner 1', 'bag'),
@@ -99,11 +109,29 @@ const initializeGameState = (): GameState => {
     },
     {
       id: 'lane_2',
-      name: 'Lane 2',
+      name: 'LANE 2',
       security_agents: [securityAgents[2], securityAgents[3]],
       passenger_queue: new Queue(),
       bag_scanner: createScanner('bag_scanner_2', 'Bag Scanner 2', 'bag'),
       person_scanner: createScanner('person_scanner_2', 'Person Scanner 2', 'person'),
+      bag_inspection_queue: new BagQueue(),
+      is_open: true,
+      processing_capacity: 5,
+      current_processing_count: 0,
+      passengers_in_body_scanner_queue: [],
+      passengers_waiting_for_bags: [],
+      passengers_completed: [],
+      bag_unloading_bays: 3, // 3 positions at the front of the queue can unload bags
+      passengers_unloading_bags: [],
+      bag_scanner_queue: [] // Initialize the bag scanner queue as an empty array
+    },
+    {
+      id: 'lane_3',
+      name: 'LANE 3',
+      security_agents: [securityAgents[4], securityAgents[5]],
+      passenger_queue: new Queue(),
+      bag_scanner: createScanner('bag_scanner_3', 'Bag Scanner 3', 'bag'),
+      person_scanner: createScanner('person_scanner_3', 'Person Scanner 3', 'person'),
       bag_inspection_queue: new BagQueue(),
       is_open: true,
       processing_capacity: 5,
@@ -127,11 +155,10 @@ const initializeGameState = (): GameState => {
     completed: [],
     rejected: [],
     time: 0,
-    score: 0,
     spawn_rate: INITIAL_SPAWN_RATE,
     last_spawn_time: Date.now(),
     paused: true, // Ensure the game starts in a paused state
-    histogram_data: {} // Initialize empty histogram data
+    histogram_data: { 0: 0 } // Initialize with zero passengers at time 0
   };
 };
 
@@ -182,10 +209,10 @@ const getRandomNationality = (): string => {
 };
 
 const Game = () => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [gameState, setGameState] = useState<GameState>(initializeGameState());
   const gameLoopRef = useRef<NodeJS.Timeout | null>(null);
   const [spawnRateInput, setSpawnRateInput] = useState<string>(INITIAL_SPAWN_RATE.toString());
+  const [selectedPassenger, setSelectedPassenger] = useState<Passenger | null>(null);
   
   // Ensure the game is properly initialized
   useEffect(() => {
@@ -386,7 +413,7 @@ const Game = () => {
           
           // Update unloading progress based on passenger's security_familiarity
           // More experienced passengers (higher familiarity) unload faster
-          const unloadingSpeed = 5 + (passenger.security_familiarity * 2); // 5-25% per second
+          const unloadingSpeed = 7 + (passenger.security_familiarity * 2.5); // 7-32% per second (increased from 5-25%)
           passenger.unloading_progress = (passenger.unloading_progress || 0) + (unloadingSpeed / 10) * (GAME_TICK_MS / 1000);
           
           // Check if unloading is complete
@@ -471,8 +498,7 @@ const Game = () => {
                 updatedLane.passengers_in_body_scanner_queue.push(passenger);
                 
                 // Update histogram data
-                const timeInterval = Math.floor(newState.time / HISTOGRAM_INTERVAL) * HISTOGRAM_INTERVAL;
-                newState.histogram_data[timeInterval] = (newState.histogram_data[timeInterval] || 0) + 1;
+                newState.histogram_data = incrementHistogramData(newState, newState.time);
               }
             }
           }
@@ -498,11 +524,19 @@ const Game = () => {
                 
                 // Record body scanner start timestamp
                 passenger.body_scanner_started_timestamp = Date.now();
+                
+                // Calculate scan time using normal distribution (mean: 3s, stdDev: 1s)
+                // Store the total scan time needed for this passenger in seconds
+                const scanTimeSeconds = Math.max(0.5, normalDistribution(3, 1)); // Minimum 0.5 seconds
+                updatedLane.person_scanner.current_scan_time_needed = updatedLane.person_scanner.current_scan_time_needed || {};
+                updatedLane.person_scanner.current_scan_time_needed[passenger.id] = scanTimeSeconds;
               }
             } else {
-              // Update scan progress
-              updatedLane.person_scanner.current_scan_progress[passenger.id] += 
-                (updatedLane.person_scanner.items_per_minute / 60) * (GAME_TICK_MS / 1000) * 100;
+              // Update scan progress based on the predetermined scan time for this passenger
+              const scanTimeNeeded = updatedLane.person_scanner.current_scan_time_needed?.[passenger.id] || 3; // Default to 3s if not set
+              const progressIncrement = (GAME_TICK_MS / 1000) * (100 / scanTimeNeeded);
+              
+              updatedLane.person_scanner.current_scan_progress[passenger.id] += progressIncrement;
               
               // Check if scan is complete
               if (updatedLane.person_scanner.current_scan_progress[passenger.id] >= 100) {
@@ -612,18 +646,14 @@ const Game = () => {
                     updatedLane.passengers_completed.push(passenger);
                     newState.completed.push(passenger);
                     
-                    // Update histogram data
-                    const timeInterval = Math.floor(newState.time / HISTOGRAM_INTERVAL) * HISTOGRAM_INTERVAL;
-                    newState.histogram_data[timeInterval] = (newState.histogram_data[timeInterval] || 0) + 1;
+                    // Update histogram data for the current interval
+                    newState.histogram_data = incrementHistogramData(newState, newState.time);
                     
                     // Remove passenger from waiting for bags
                     updatedLane.passengers_waiting_for_bags.splice(passengerWaitingIndex, 1);
                     
                     // Decrement processing count
                     updatedLane.current_processing_count = Math.max(0, updatedLane.current_processing_count - 1);
-                    
-                    // Update score
-                    newState.score += 10;
                   }
                 }
               }
@@ -638,18 +668,14 @@ const Game = () => {
           updatedLane.passengers_completed.push(passenger);
           newState.completed.push(passenger);
           
-          // Update histogram data
-          const timeInterval = Math.floor(newState.time / HISTOGRAM_INTERVAL) * HISTOGRAM_INTERVAL;
-          newState.histogram_data[timeInterval] = (newState.histogram_data[timeInterval] || 0) + 1;
+          // Update histogram data for the current interval
+          newState.histogram_data = incrementHistogramData(newState, newState.time);
           
           // Remove from waiting for bags
           updatedLane.passengers_waiting_for_bags = updatedLane.passengers_waiting_for_bags.filter(p => p.id !== passenger.id);
           
           // Decrement processing count
           updatedLane.current_processing_count = Math.max(0, updatedLane.current_processing_count - 1);
-          
-          // Update score
-          newState.score += 5;
         }
         
         // 6. Anti-deadlock mechanism: Supervisor intervention
@@ -699,9 +725,8 @@ const Game = () => {
               updatedLane.passengers_completed.push(oldestWaitingPassenger);
               newState.completed.push(oldestWaitingPassenger);
               
-              // Update histogram data
-              const timeInterval = Math.floor(newState.time / HISTOGRAM_INTERVAL) * HISTOGRAM_INTERVAL;
-              newState.histogram_data[timeInterval] = (newState.histogram_data[timeInterval] || 0) + 1;
+              // Update histogram data for the current interval
+              newState.histogram_data = incrementHistogramData(newState, newState.time);
               
               // Remove passenger from waiting for bags
               const waitingIndex = updatedLane.passengers_waiting_for_bags.findIndex(
@@ -713,9 +738,6 @@ const Game = () => {
               
               // Decrement processing count
               updatedLane.current_processing_count = Math.max(0, updatedLane.current_processing_count - 1);
-              
-              // Update score (slightly reduced for supervisor intervention)
-              newState.score += 7;
             }
           }
         }
@@ -757,7 +779,12 @@ const Game = () => {
         paused: true
       }));
     } else {
-      // Game is paused, start it
+      if(gameState.time === 0) {
+        for(let i = 0; i < 10; i++) {
+          createAndAddPassenger();
+        }
+      }
+
       setGameState(prevState => ({
         ...prevState,
         paused: false
@@ -769,6 +796,9 @@ const Game = () => {
         setGameState(prevState => {
           const newState = { ...prevState };
           newState.time = prevState.time + (GAME_TICK_MS / 1000);
+          
+          // Update histogram data to ensure all intervals exist
+          newState.histogram_data = updateHistogramData(prevState);
           
           // Check if it's time to spawn a new passenger
           const currentTime = Date.now();
@@ -820,46 +850,11 @@ const Game = () => {
   
   // Canvas rendering
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    
-    // Set canvas dimensions
-    canvas.width = CANVAS_WIDTH;
-    canvas.height = CANVAS_HEIGHT;
-    
-    // Apply pixelated rendering for low-res aesthetic
-    ctx.imageSmoothingEnabled = false;
-    
     // Game variables
     let animationFrameId: number;
     
     // Game loop
     const render = () => {
-      // Clear the canvas
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
-      // Draw background
-      ctx.fillStyle = '#f0f0f0';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      // Draw a simple shape to show the canvas is working
-      ctx.fillStyle = '#3498db';
-      ctx.beginPath();
-      ctx.arc(canvas.width / 2, canvas.height / 2, 50, 0, Math.PI * 2);
-      ctx.fill();
-      
-      // Add text
-      ctx.fillStyle = '#333';
-      ctx.font = '24px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText('Airport Security Simulator', canvas.width / 2, canvas.height / 2 - 50);
-      ctx.font = '18px Arial';
-      ctx.fillText('Game logic is running in the background', canvas.width / 2, canvas.height / 2 + 50);
-      ctx.fillText('Use the controls below to manage the game', canvas.width / 2, canvas.height / 2 + 80);
-      
       // Continue animation loop
       animationFrameId = window.requestAnimationFrame(render);
     };
@@ -873,60 +868,9 @@ const Game = () => {
     };
   }, []);
   
-  // Format time as MM:SS
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-  
   // Get a limited number of passengers from the main queue to display
   const getDisplayPassengers = () => {
-    return gameState.main_queue.getAll().slice(0, 5); // Only show up to 5 passengers
-  };
-  
-  // Debug a passenger's journey
-  const debugPassengerJourney = (passenger: Passenger) => {
-    // Format timestamps for display
-    const formatTimestamp = (timestamp?: number) => {
-      if (!timestamp) return 'N/A';
-      return new Date(timestamp).toLocaleTimeString();
-    };
-    
-    // Calculate duration between two timestamps
-    const calculateDuration = (start?: number, end?: number) => {
-      if (!start || !end) return 'N/A';
-      const durationMs = end - start;
-      return `${(durationMs / 1000).toFixed(1)}s`;
-    };
-    
-    // Create a formatted journey log
-    const journeyLog = [
-      `Passenger: ${passenger.name} (${passenger.nationality})`,
-      `Spawned: ${formatTimestamp(passenger.spawned_timestamp)}`,
-      `Assigned to lane: ${formatTimestamp(passenger.security_lane_queue_assigned_timestamp)}`,
-      `Wait time in main queue: ${calculateDuration(passenger.spawned_timestamp, passenger.security_lane_queue_assigned_timestamp)}`,
-      passenger.has_bag ? [
-        `Bag unload started: ${formatTimestamp(passenger.bag_unload_started_timestamp)}`,
-        `Bag unload completed: ${formatTimestamp(passenger.bag_unload_completed_timestamp)}`,
-        `Bag unload duration: ${calculateDuration(passenger.bag_unload_started_timestamp, passenger.bag_unload_completed_timestamp)}`,
-        `Bag scanner started: ${formatTimestamp(passenger.bag_scanner_started_timestamp)}`,
-        `Bag scanner completed: ${formatTimestamp(passenger.bag_scanner_complete_timestamp)}`,
-        `Bag scan duration: ${calculateDuration(passenger.bag_scanner_started_timestamp, passenger.bag_scanner_complete_timestamp)}`
-      ].join('\n') : 'No bag',
-      `Body scanner queue joined: ${formatTimestamp(passenger.body_scanner_queue_joined_timestamp)}`,
-      `Body scanner started: ${formatTimestamp(passenger.body_scanner_started_timestamp)}`,
-      `Body scanner finished: ${formatTimestamp(passenger.body_scanner_finished_timestamp)}`,
-      `Body scan duration: ${calculateDuration(passenger.body_scanner_started_timestamp, passenger.body_scanner_finished_timestamp)}`,
-      `Waiting for bag started: ${formatTimestamp(passenger.waiting_for_bag_started_timestamp)}`,
-      `Waiting for bag finished: ${formatTimestamp(passenger.waiting_for_bag_finished_timestamp)}`,
-      `Waiting for bag duration: ${calculateDuration(passenger.waiting_for_bag_started_timestamp, passenger.waiting_for_bag_finished_timestamp)}`,
-      `Security cleared: ${formatTimestamp(passenger.security_cleared_timestamp)}`,
-      `Total security process time: ${calculateDuration(passenger.security_lane_queue_assigned_timestamp, passenger.security_cleared_timestamp)}`
-    ].join('\n');
-    
-    console.log(journeyLog);
-    alert(journeyLog);
+    return gameState.main_queue.getAll().slice(0, MAX_QUEUE_DISPLAY_LENGTH); // Only show up to 5 passengers
   };
   
   // Debug a lane
@@ -947,160 +891,73 @@ const Game = () => {
     alert(laneInfo);
   };
   
-  // Debug function to log main queue state to console
-  const debugMainQueue = () => {
-    console.log('Main Queue Debug:');
-    console.log('Queue Length:', gameState.main_queue.length);
-    console.log('Queue Contents:', gameState.main_queue.getAll().map(p => ({
-      id: p.id,
-      name: p.name,
-      has_bag: p.has_bag
-    })));
-    console.log('Passengers Array Length:', gameState.passengers.length);
-    console.log('Bags Array Length:', gameState.bags.length);
-    
-    // Check for duplicate passengers in the queue
-    const passengers = gameState.main_queue.getAll();
-    const passengerIds = passengers.map(p => p.id);
-    const uniqueIds = new Set(passengerIds);
-    if (passengerIds.length !== uniqueIds.size) {
-      console.warn('DUPLICATE PASSENGERS DETECTED IN MAIN QUEUE!');
-      
-      // Find the duplicates
-      const counts: Record<string, number> = {};
-      passengerIds.forEach(id => {
-        counts[id] = (counts[id] || 0) + 1;
-      });
-      
-      // Log the duplicates
-      Object.entries(counts)
-        .filter(([, count]) => count > 1)
-        .forEach(([id, count]) => {
-          console.warn(`Passenger ID ${id} appears ${count} times in the queue`);
-        });
-    }
+  // Calculate duration between two timestamps
+  const calculateDuration = (start?: number, end?: number) => {
+    if (!start || !end) return 0;
+    const durationMs = end - start;
+    return durationMs / 1000; // Return duration in seconds
   };
   
-  // Clear histogram data
-  const clearHistogram = () => {
-    setGameState(prevState => ({
-      ...prevState,
-      histogram_data: {}
-    }));
+  // Format duration for display
+  const formatDuration = (durationSeconds: number) => {
+    if (durationSeconds === 0) return 'N/A';
+    return `${durationSeconds.toFixed(1)}s`;
   };
   
-  // Helper function to render the histogram
-  const renderHistogram = () => {
-    // Get the histogram data from the game state
-    const { histogram_data } = gameState;
+  // Update histogram data for the current time interval
+  const updateHistogramData = (prevState: GameState): Record<number, number> => {
+    const currentInterval = Math.floor(prevState.time / HISTOGRAM_INTERVAL) * HISTOGRAM_INTERVAL;
+    const newHistogramData = { ...prevState.histogram_data };
     
-    // Convert the histogram data to an array of [time, count] pairs and sort by time
-    const histogramEntries = Object.entries(histogram_data)
-      .map(([time, count]) => [parseInt(time), count])
-      .sort((a, b) => (b[0] as number) - (a[0] as number)); // Sort in descending order (newest first)
-    
-    // If there's no data, show a message
-    if (histogramEntries.length === 0) {
-      return (
-        <div className="text-gray-400 text-center py-4">
-          No passenger data available yet. Process passengers to see the histogram.
-        </div>
-      );
+    // Ensure all intervals up to the current one exist and are numbers
+    for (let t = 0; t <= currentInterval; t += HISTOGRAM_INTERVAL) {
+      if (!(t in newHistogramData) || typeof newHistogramData[t] !== 'number') {
+        newHistogramData[t] = 0;
+      }
     }
     
-    // Find the maximum count for scaling
-    const maxCount = Math.max(...histogramEntries.map(entry => entry[1] as number));
-    
-    // Calculate the bar height based on the maximum count
-    const getBarHeight = (count: number) => {
-      return Math.max(10, (count / maxCount) * 150); // Min height of 10px, max height of 150px
-    };
-    
-    return (
-      <div className="flex flex-col">
-        <div className="flex justify-between items-center mb-2">
-          <div className="text-xs text-gray-500">Passengers Processed</div>
-          <div className="text-xs text-gray-500">Max: {maxCount} passengers / {HISTOGRAM_INTERVAL}s</div>
-        </div>
-        <div className="flex items-end h-[180px] border-b border-l border-gray-300 relative">
-          {/* Y-axis labels */}
-          <div className="absolute left-0 top-0 bottom-0 w-8 flex flex-col justify-between">
-            <span className="text-xs text-gray-500 -translate-x-2 -translate-y-2">{maxCount}</span>
-            <span className="text-xs text-gray-500 -translate-x-2 translate-y-2">0</span>
-          </div>
-          
-          {/* Bars */}
-          <div className="flex items-end pl-8 w-full h-full gap-1 overflow-x-auto pb-6">
-            {histogramEntries.map(([time, count], index) => (
-              <div key={index} className="flex flex-col items-center">
-                <div 
-                  className="w-12 bg-blue-500 rounded-t"
-                  style={{ height: `${getBarHeight(count as number)}px` }}
-                >
-                  <div className="text-white text-xs text-center font-bold">
-                    {count}
-                  </div>
-                </div>
-                <div className="text-xs text-gray-500 mt-1 whitespace-nowrap">
-                  {formatTime(time as number)}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
+    return newHistogramData;
+  };
+  
+  // Helper function to safely increment histogram data
+  const incrementHistogramData = (state: GameState, time: number) => {
+    const timeInterval = Math.floor(time / HISTOGRAM_INTERVAL) * HISTOGRAM_INTERVAL;
+    const newHistogramData = updateHistogramData(state);
+    newHistogramData[timeInterval] = (newHistogramData[timeInterval] || 0) + 1;
+    return newHistogramData;
+  };
+  
+  // Generate a random number from a normal distribution
+  const normalDistribution = (mean: number, stdDev: number): number => {
+    // Box-Muller transform to generate normally distributed random numbers
+    const u1 = Math.random();
+    const u2 = Math.random();
+    const z0 = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+    return z0 * stdDev + mean;
   };
   
   return (
-    <div className="flex flex-col items-center">
-      {/* Hide the canvas by adding a display: none style */}
-      <div className="pixelated" style={{ display: 'none' }}>
-        <canvas
-          ref={canvasRef}
-          className="border border-gray-800 shadow-lg"
-          style={{ 
-            imageRendering: 'pixelated',
-            width: `${CANVAS_WIDTH}px`,
-            height: `${CANVAS_HEIGHT}px`
-          }}
-        />
-      </div>
-      
-      {/* Game Controls */}
-      <div className="mt-4 p-4 border border-gray-300 rounded-lg w-full max-w-4xl">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold">Game Controls</h2>
-          <div className="flex items-center">
-            <span className="mr-2">Status:</span>
-            <span className={`px-2 py-1 rounded text-white ${gameState.paused ? 'bg-red-500' : 'bg-green-500'}`}>
-              {gameState.paused ? 'Paused' : 'Running'}
-            </span>
-          </div>
+    <div className="flex flex-col flex-1 min-w-full min-h-0"> {/* min-h-0 is crucial for flex child scrolling */}
+      {/* Top Controls Bar */}
+      <div className="flex justify-between items-center border-b border-gray-300 p-4">
+        <div className="text-sm py-1 font-['Press_Start_2P'] text-blue-800">
+          ANYTHING IN YOUR POCKETS?
         </div>
-        <div className="flex space-x-2 mb-4 items-center">
+        
+        <div className="flex items-center space-x-4">
           <Button 
             onClick={toggleGame}
             className={`w-24 ${gameState.paused ? "bg-green-500 hover:bg-green-600" : "bg-yellow-500 hover:bg-yellow-600"}`}
           >
-            {gameState.paused ? "Start" : "Pause"}
+            {gameState.paused ? "PLAY" : "PAUSE"}
           </Button>
-          <Button 
-            variant="destructive"
-            className="w-24"
-            onClick={resetGame}
-          >
-            Reset
-          </Button>
-          <Button 
-            variant="secondary"
-            className="w-36"
-            onClick={spawnPassenger}
-          >
-            Spawn Passenger
-          </Button>
-          <div className="flex items-center ml-4">
-            <span className="mr-2 whitespace-nowrap">Spawn Rate:</span>
+          
+          <div className="text-lg font-bold">
+            {formatTime(gameState.time)}
+          </div>
+          
+          <div className="flex items-center">
+            <span className="mr-2 whitespace-nowrap text-sm">Rate:</span>
             <Input 
               type="number" 
               min="0.1" 
@@ -1109,370 +966,564 @@ const Game = () => {
               value={spawnRateInput}
               onChange={(e) => setSpawnRateInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && updateSpawnRate()}
-              className="w-16 h-9"
+              className="w-16 h-8"
             />
-            <span className="mx-2 whitespace-nowrap">per min</span>
+            <span className="mx-1 whitespace-nowrap text-sm">/min</span>
             <Button 
               variant="outline"
               onClick={updateSpawnRate}
               size="sm"
-              className="w-20"
+              className="h-8 px-2"
             >
-              Update
-            </Button>
-            <span className="ml-2 text-xs text-gray-500 whitespace-nowrap">
-              (Current: {gameState.spawn_rate.toFixed(1)}/min)
-            </span>
-          </div>
-        </div>
-        
-        {/* Game Stats */}
-        <div className="mb-4 p-3 bg-gray-100 rounded">
-          <h3 className="font-bold">Game Stats</h3>
-          <div className="grid grid-cols-3 gap-2">
-            <div>Time: {formatTime(gameState.time)}</div>
-            <div>Score: {gameState.score}</div>
-            <div>Spawn Rate: {gameState.spawn_rate}/min</div>
-          </div>
-        </div>
-        
-        {/* Main Queue */}
-        <div className="mb-4 p-3 bg-gray-100 rounded">
-          <div className="flex justify-between items-center">
-            <h3 className="font-bold">Main Queue ({gameState.main_queue.length} passengers)</h3>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={debugMainQueue}
-              className="h-7 px-2 py-1 text-xs bg-gray-100 w-16"
-            >
-              Debug
+              Set
             </Button>
           </div>
           
-          {/* Queue Capacity Progress Bar */}
-          <div className="mt-2 mb-3">
-            <div className="flex justify-between text-xs mb-1">
-              <span>Queue Capacity: {gameState.main_queue.length}/200</span>
-              <span>{Math.round((gameState.main_queue.length / 200) * 100)}%</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2.5">
-              <div 
-                className={`h-2.5 rounded-full ${
-                  (gameState.main_queue.length / 200) * 100 < 50 ? 'bg-green-500' : 
-                  (gameState.main_queue.length / 200) * 100 < 70 ? 'bg-yellow-500' : 
-                  (gameState.main_queue.length / 200) * 100 < 90 ? 'bg-orange-500' : 
-                  'bg-red-500'
-                }`}
-                style={{ width: `${Math.min((gameState.main_queue.length / 200) * 100, 100)}%` }}
-              ></div>
+          <Button 
+            variant="secondary"
+            size="sm"
+            onClick={spawnPassenger}
+            className="h-8"
+          >
+            Spawn
+          </Button>
+          
+          <Button 
+            variant="destructive"
+            size="sm"
+            onClick={resetGame}
+            className="h-8"
+          >
+            Reset
+          </Button>
+        </div>
+      </div>
+
+      {/* Main UI */}
+      <div className="flex flex-1 ">
+        {/* Left Column - Security Queue */}
+        <div className="w-1/5 border-r border-gray-300 flex flex-col min-h-0"> {/* min-h-0 allows flex child to scroll */}
+          <div className="p-4 border-b border-gray-300">
+            <h2 className="text-xl font-bold mb-3">SECURITY QUEUE</h2>
+            
+            {/* Queue Capacity Progress Bar */}
+            <div className="mb-3">
+              <div className="flex justify-between text-xs mb-1">
+                <span>Queue Capacity: {gameState.main_queue.length}/200</span>
+                <span>{Math.round((gameState.main_queue.length / 200) * 100)}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div 
+                  className={`h-2.5 rounded-full ${
+                    (gameState.main_queue.length / 200) * 100 < 50 ? 'bg-green-500' : 
+                    (gameState.main_queue.length / 200) * 100 < 70 ? 'bg-yellow-500' : 
+                    (gameState.main_queue.length / 200) * 100 < 90 ? 'bg-orange-500' : 
+                    'bg-red-500'
+                  }`}
+                  style={{ width: `${Math.min((gameState.main_queue.length / 200) * 100, 100)}%` }}
+                ></div>
+              </div>
             </div>
           </div>
-          
-          <div className="flex flex-wrap gap-2 mt-2">
+
+          {/* Scrollable Queue List */}
+          <div className="flex-1 max-h-[calc(100%-100px)] overflow-y-auto p-2">
             {getDisplayPassengers().map((passenger, index) => (
-              <div key={`${passenger.id}-${index}`} className="p-2 bg-white rounded border border-gray-300 text-sm w-48">
-                <div className="flex items-center justify-between">
-                  <span className="truncate">{passenger.name} ({passenger.nationality})</span>
-                  <span className="ml-1">{passenger.has_bag ? '🧳' : '🚶'}</span>
-                </div>
+              <div key={`${passenger.id}-${index}`} className="p-2 bg-white border border-gray-300 text-sm mb-2">
+                <PassengerLabel 
+                  passenger={passenger} 
+                  onClick={setSelectedPassenger}
+                  showDetails={true}
+                />
                 <div className="mt-1">
                   <div className="text-xs font-semibold mb-1">Assign to lane:</div>
-                  <div className="flex flex-wrap gap-1">
-                    {gameState.security_lanes.map(lane => (
-                      <Button 
-                        key={lane.id}
-                        variant="outline"
-                        size="sm"
-                        onClick={() => assignPassengerToLane(passenger.id, lane.id)}
-                        className="h-7 px-2 py-1 text-xs w-16"
-                      >
-                        {lane.name}
-                      </Button>
-                    ))}
+                  <div className="flex flex-row flex-wrap gap-1">
+                    {gameState.security_lanes.slice(0, 2).map(lane => {
+                      const laneIsDisabled = lane.passenger_queue.length >= SECURITY_LANE_QUEUE_CAPACITY;
+                      return (
+                        <Button 
+                          key={lane.id}
+                          variant="outline"
+                          disabled={laneIsDisabled}
+                          size="sm"
+                          onClick={() => assignPassengerToLane(passenger.id, lane.id)}
+                          className="h-7 px-2 py-1 text-xs"
+                        >
+                          {laneIsDisabled ? '🔴' : '🟢'} {lane.name}
+                        </Button>
+                      )})}
                   </div>
                 </div>
               </div>
             ))}
-            {gameState.main_queue.length > 5 && (
-              <div className="p-2 bg-gray-200 rounded text-sm">
-                +{gameState.main_queue.length - 5} more passengers
+          {gameState.main_queue.length > MAX_QUEUE_DISPLAY_LENGTH && (
+              <div className="p-2 bg-gray-200 rounded text-sm text-center">
+                +{gameState.main_queue.length - MAX_QUEUE_DISPLAY_LENGTH} more passengers
               </div>
             )}
           </div>
         </div>
-        
-        {/* Security Lanes */}
-        <div className="p-3 bg-gray-100 rounded">
-          <h3 className="font-bold">Security Lanes</h3>
-          <div className="grid grid-cols-2 gap-4 mt-2">
-            {gameState.security_lanes.map((lane, laneIndex) => (
-              <div key={`${lane.id}-${laneIndex}`} className="p-3 bg-white border rounded">
-                <div className="flex justify-between items-center">
-                  <h4 className="font-bold">{lane.name} ({lane.is_open ? 'Open' : 'Closed'})</h4>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => debugLane(lane)}
-                    className="h-7 px-2 py-1 text-xs bg-gray-100 w-16"
-                  >
-                    Debug
-                  </Button>
-                </div>
-                
-                {/* QUEUE SECTION */}
-                <div className="mt-3 border-t pt-2">
-                  <h5 className="font-semibold text-sm">SECURITY LANE QUEUE</h5>
-                  <div className="bg-gray-50 p-2 rounded min-h-[80px]">
-                    <div className="flex justify-between text-xs mb-1">
-                      <span>Length: {lane.passenger_queue.length} passengers</span>
-                      <span>{Math.round((lane.passenger_queue.length / SECURITY_LANE_QUEUE_CAPACITY) * 100)}%</span>
-                    </div>
-                    
-                    {/* Queue Capacity Progress Bar */}
-                    <div className="w-full bg-gray-200 rounded-full h-1.5 mb-2">
-                      <div 
-                        className={`h-1.5 rounded-full ${
-                          (lane.passenger_queue.length / SECURITY_LANE_QUEUE_CAPACITY) * 100 < 50 ? 'bg-green-500' : 
-                          (lane.passenger_queue.length / SECURITY_LANE_QUEUE_CAPACITY) * 100 < 70 ? 'bg-yellow-500' : 
-                          (lane.passenger_queue.length / SECURITY_LANE_QUEUE_CAPACITY) * 100 < 90 ? 'bg-orange-500' : 
-                          'bg-red-500'
-                        }`}
-                        style={{ width: `${Math.min((lane.passenger_queue.length / SECURITY_LANE_QUEUE_CAPACITY) * 100, 100)}%` }}
-                      ></div>
-                    </div>
-                    
-                    {lane.passenger_queue.length > 0 ? (
-                      <div className="bg-gray-100 p-1 rounded">
-                        {lane.passenger_queue.getAll().slice(0, 3).map((passenger, idx) => (
-                          <div key={`${passenger.id}-${idx}`} className="text-xs flex items-center justify-between">
-                            <span className="truncate">{passenger.name}</span>
-                            <span className="ml-1">{passenger.has_bag ? '🧳' : '🚶'}</span>
-                          </div>
-                        ))}
-                        {lane.passenger_queue.length > 3 && (
-                          <div className="text-xs text-gray-500 italic">
-                            +{lane.passenger_queue.length - 3} more
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="text-gray-400 text-xs italic">Queue empty</div>
-                    )}
+
+        {/* Center Column - Security Lanes */}
+        <div className="flex-1 flex flex-col min-h-0">
+          {/* Main Content Area - Scrollable */}
+          <div className="flex-1 overflow-y-auto">
+            {/* Security Lanes */}
+            <div className="flex flex-col">
+              {/* Security Lanes */}
+              {gameState.security_lanes.slice(0, 2).map((lane, laneIndex) => (
+                <div key={`${lane.id}-${laneIndex}`} className="col-span-1 border first:border-t-0 border-l-0 border-b-0 border-gray-300 p-2">
+                  <div className="flex justify-between items-center mb-3">
+                    <h2 className="text-xl font-bold">{lane.name}</h2>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => debugLane(lane)}
+                      className="h-7 px-2 py-1 text-xs bg-gray-100"
+                    >
+                      Debug
+                    </Button>
                   </div>
-                </div>
-                
-                {/* SCANNER QUEUES - SIDE BY SIDE */}
-                <div className="mt-3 border-t pt-2">
-                  <div className="grid grid-cols-2 gap-2">
-                    {/* BAG SCANNER QUEUE SECTION */}
-                    <div>
-                      <h5 className="font-semibold text-sm">BAG SCANNER QUEUE</h5>
-                      <div className="bg-gray-50 p-2 rounded min-h-[120px]">
-                        <div className="text-xs mb-1">Length: {lane.bag_scanner_queue.length} passengers</div>
+                  
+                  {/* Lane layout based on wireframe - 4 column layout */}
+                  <div className="grid grid-cols-4 gap-2 min-h-[450px]">
+                    {/* Column 1: Lane Queue (full height) */}
+                    <div className="col-span-1 border border-gray-200 rounded p-2 h-full">
+                      <h3 className="font-semibold text-sm mb-2">Lane queue</h3>
+                      <div className="bg-gray-50 p-2 rounded h-[calc(100%-2rem)]">
+                        <div className="flex justify-between text-xs mb-1">
+                          <span>Length: {lane.passenger_queue.length} passengers</span>
+                          <span>{Math.round((lane.passenger_queue.length / SECURITY_LANE_QUEUE_CAPACITY) * 100)}%</span>
+                        </div>
                         
-                        {lane.bag_scanner_queue.length > 0 ? (
-                          <div className="bg-gray-100 p-1 rounded">
-                            {lane.bag_scanner_queue.slice(0, 3).map((passenger, idx) => (
-                              <div key={`${passenger.id}-${idx}`} className="text-xs flex items-center justify-between mb-1">
-                                <span className="truncate">{passenger.name}</span>
-                                <div className="flex items-center">
-                                  <span className="mr-1">🧳</span>
-                                  {passenger.unloading_bag && (
-                                    <div className="flex items-center">
-                                      <div className="w-10 bg-gray-200 rounded-full h-1.5 mr-1">
+                        {/* Queue Capacity Progress Bar */}
+                        <div className="w-full bg-gray-200 rounded-full h-1.5 mb-2">
+                          <div 
+                            className={`h-1.5 rounded-full ${
+                              (lane.passenger_queue.length / SECURITY_LANE_QUEUE_CAPACITY) * 100 < 50 ? 'bg-green-500' : 
+                              (lane.passenger_queue.length / SECURITY_LANE_QUEUE_CAPACITY) * 100 < 70 ? 'bg-yellow-500' : 
+                              (lane.passenger_queue.length / SECURITY_LANE_QUEUE_CAPACITY) * 100 < 90 ? 'bg-orange-500' : 
+                              'bg-red-500'
+                            }`}
+                            style={{ width: `${Math.min((lane.passenger_queue.length / SECURITY_LANE_QUEUE_CAPACITY) * 100, 100)}%` }}
+                          ></div>
+                        </div>
+                        
+                        <div className="overflow-y-auto h-[calc(100%-2rem)]">
+                          {lane.passenger_queue.length > 0 ? (
+                            <div className="bg-gray-100 p-1 rounded">
+                              {lane.passenger_queue.getAll().map((passenger, idx) => (
+                                <div key={`${passenger.id}-${idx}`} className="text-xs mb-1 border-b border-gray-100 last:border-0">
+                                  <PassengerLabel 
+                                    passenger={passenger} 
+                                    onClick={setSelectedPassenger}
+                                    showDetails={false}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-gray-400 text-xs italic">Queue empty</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Column 2: Scanner Queues */}
+                    <div className="col-span-1 flex flex-col space-y-3">
+                      {/* Bag Scanner Queue */}
+                      <div className="border border-gray-200 rounded p-2 flex-1">
+                        <h3 className="font-semibold text-sm mb-2">Bag scanner queue</h3>
+                        <div className="bg-gray-50 p-2 rounded h-[calc(100%-2rem)]">
+                          <div className="text-xs mb-1">Length: {lane.bag_scanner_queue.length} passengers</div>
+                          
+                          <div className="overflow-y-auto h-[calc(100%-1.5rem)]">
+                            {lane.bag_scanner_queue.length > 0 ? (
+                              <div className="bg-gray-100 p-1 rounded">
+                                {lane.bag_scanner_queue.map((passenger, idx) => {
+                                  const isUnloading = passenger.unloading_bag;
+                                  const isWaiting = idx >= lane.bag_unloading_bays;
+                                  return (
+                                    <div key={`${passenger.id}-${idx}`} className="text-xs mb-1 border-b border-gray-100 last:border-b-0">
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-1">
+                                          <PassengerLabel 
+                                            passenger={passenger} 
+                                            onClick={setSelectedPassenger}
+                                            showDetails={false}
+                                          />
+                                          {!isUnloading && isWaiting && (
+                                            <span className="text-gray-400 text-[10px] italic">waiting</span>
+                                          )}
+                                        </div>
+                                        {passenger.unloading_bag && (
+                                          <div className="flex items-center ml-2">
+                                            <div className="w-10 bg-gray-200 rounded-full h-1.5 mr-1">
+                                              <div 
+                                                className="bg-blue-500 h-1.5 rounded-full" 
+                                                style={{width: `${Math.floor(passenger.unloading_progress || 0)}%`}}
+                                              ></div>
+                                            </div>
+                                            <span className="text-xs">{Math.floor(passenger.unloading_progress || 0)}%</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <div className="text-gray-400 text-xs italic">Queue empty</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Body Scanner Queue */}
+                      <div className="border border-gray-200 rounded p-2 flex-1">
+                        <h3 className="font-semibold text-sm mb-2">Body scanner queue</h3>
+                        <div className="bg-gray-50 p-2 rounded h-[calc(100%-2rem)]">
+                          <div className="text-xs mb-1">Length: {lane.passengers_in_body_scanner_queue.length} passengers</div>
+                          
+                          <div className="overflow-y-auto h-[calc(100%-1.5rem)]">
+                            {lane.passengers_in_body_scanner_queue.length > 0 ? (
+                              <div className="bg-gray-100 p-1 rounded">
+                                {lane.passengers_in_body_scanner_queue.map((passenger, idx) => (
+                                  <div key={`${passenger.id}-${idx}`} className="text-xs mb-1 border-b border-gray-100 last:border-b-0">
+                                    <PassengerLabel 
+                                      passenger={passenger} 
+                                      onClick={setSelectedPassenger}
+                                      showDetails={false}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="text-gray-400 text-xs italic">Queue empty</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Column 3: Scanners */}
+                    <div className="col-span-1 flex flex-col space-y-3">
+                      {/* Bag Scanner */}
+                      <div className="border border-gray-200 rounded p-2 flex-1">
+                        <h3 className="font-semibold text-sm mb-2">Bag scanner</h3>
+                        <div className="bg-gray-50 p-2 rounded h-[calc(100%-2rem)]">
+                          <div className="text-xs font-semibold mb-1">Scanner: {lane.bag_scanner.current_items.length}/{lane.bag_scanner.capacity}</div>
+                          
+                          <div className="overflow-y-auto h-[calc(100%-1.5rem)]">
+                            {lane.bag_scanner.current_items.length > 0 ? (
+                              <div className="bg-gray-100 p-1 rounded">
+                                {lane.bag_scanner.current_items.map(bagId => {
+                                  const bag = gameState.bags.find(b => b.id === bagId);
+                                  return bag ? (
+                                    <div key={bagId} className="text-xs flex justify-between items-center mb-1 p-1 border-b border-gray-100 last:border-b-0">
+                                      <span className="truncate w-16">{bag.passenger_name.split(' ')[0]}</span>
+                                      <div className="w-12 bg-gray-200 rounded-full h-2">
                                         <div 
-                                          className="bg-blue-500 h-1.5 rounded-full" 
-                                          style={{width: `${Math.floor(passenger.unloading_progress || 0)}%`}}
+                                          className="bg-green-500 h-2 rounded-full" 
+                                          style={{width: `${Math.floor(lane.bag_scanner.current_scan_progress[bagId] || 0)}%`}}
                                         ></div>
                                       </div>
-                                      <span className="text-xs">{Math.floor(passenger.unloading_progress || 0)}%</span>
+                                      <span className="w-6 text-right">{Math.floor(lane.bag_scanner.current_scan_progress[bagId] || 0)}%</span>
                                     </div>
-                                  )}
-                                </div>
+                                  ) : null;
+                                })}
                               </div>
-                            ))}
-                            {lane.bag_scanner_queue.length > 3 && (
-                              <div className="text-xs text-gray-500 italic">
-                                +{lane.bag_scanner_queue.length - 3} more
-                              </div>
+                            ) : (
+                              <div className="text-gray-400 text-xs italic">No bags in scanner</div>
                             )}
                           </div>
-                        ) : (
-                          <div className="text-gray-400 text-xs italic">Queue empty</div>
-                        )}
+                        </div>
+                      </div>
+                      
+                      {/* Body Scanner */}
+                      <div className="border border-gray-200 rounded p-2 flex-1">
+                        <h3 className="font-semibold text-sm mb-2">Body scanner</h3>
+                        <div className="bg-gray-50 p-2 rounded h-[calc(100%-2rem)]">
+                          <div className="text-xs font-semibold mb-1">Scanner: {lane.person_scanner.current_items.length}/{lane.person_scanner.capacity}</div>
+                          
+                          <div className="overflow-y-auto h-[calc(100%-1.5rem)]">
+                            {lane.person_scanner.current_items.length > 0 ? (
+                              <div className="bg-gray-100 p-1 rounded">
+                                {lane.person_scanner.current_items.map(personId => {
+                                  const passenger = gameState.passengers.find(p => p.id === personId);
+                                  return passenger ? (
+                                    <div key={personId} className="text-xs flex justify-between items-center mb-1 p-1 border-b border-gray-100 last:border-b-0">
+                                      <span className="truncate w-16">{passenger.name.split(' ')[0]}</span>
+                                      <div className="w-12 bg-gray-200 rounded-full h-2">
+                                        <div 
+                                          className="bg-green-500 h-2 rounded-full" 
+                                          style={{width: `${Math.floor(lane.person_scanner.current_scan_progress[personId] || 0)}%`}}
+                                        ></div>
+                                      </div>
+                                      <span className="w-6 text-right">{Math.floor(lane.person_scanner.current_scan_progress[personId] || 0)}%</span>
+                                    </div>
+                                  ) : null;
+                                })}
+                              </div>
+                            ) : (
+                              <div className="text-gray-400 text-xs italic">No people in scanner</div>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
                     
-                    {/* BODY SCANNER QUEUE SECTION */}
-                    <div>
-                      <h5 className="font-semibold text-sm">BODY SCANNER QUEUE</h5>
-                      <div className="bg-gray-50 p-2 rounded min-h-[120px]">
-                        <div className="text-xs mb-1">Length: {lane.passengers_in_body_scanner_queue.length} passengers</div>
-                        
-                        {lane.passengers_in_body_scanner_queue.length > 0 ? (
-                          <div className="bg-gray-100 p-1 rounded">
-                            {lane.passengers_in_body_scanner_queue.slice(0, 3).map((passenger, idx) => (
-                              <div key={`${passenger.id}-${idx}`} className="text-xs flex items-center justify-between mb-1">
-                                <span className="truncate">{passenger.name}</span>
-                                <span>{passenger.has_bag ? '🧳' : '🚶'}</span>
+                    {/* Column 4: Placeholder and Waiting for Bags */}
+                    <div className="col-span-1 flex flex-col space-y-3">
+                      {/* Placeholder */}
+                      <div className="border border-gray-200 rounded p-2 flex-1">
+                        <h3 className="font-semibold text-sm mb-2">PLACEHOLDER</h3>
+                        <div className="bg-gray-50 p-2 rounded h-[calc(100%-2rem)]">
+                          <div className="text-gray-400 text-xs italic">Future functionality</div>
+                        </div>
+                      </div>
+                      
+                      {/* Waiting for Bags */}
+                      <div className="border border-gray-200 rounded p-2 flex-1">
+                        <h3 className="font-semibold text-sm mb-2">Waiting for bags</h3>
+                        <div className="bg-gray-50 p-2 rounded h-[calc(100%-2rem)]">
+                          <div className="overflow-y-auto h-full">
+                            {lane.passengers_waiting_for_bags.length > 0 ? (
+                              <div>
+                                {lane.passengers_waiting_for_bags.map((passenger, idx) => (
+                                  <div key={`${passenger.id}-waiting-${idx}`} className="text-xs py-1 border-b border-gray-100 last:border-0">
+                                    <PassengerLabel 
+                                      passenger={passenger} 
+                                      onClick={setSelectedPassenger}
+                                      showDetails={false}
+                                    />
+                                  </div>
+                                ))}
                               </div>
-                            ))}
-                            {lane.passengers_in_body_scanner_queue.length > 3 && (
-                              <div className="text-xs text-gray-500 italic">
-                                +{lane.passengers_in_body_scanner_queue.length - 3} more
-                              </div>
+                            ) : (
+                              <div className="text-gray-400 text-xs italic">No passengers waiting</div>
                             )}
                           </div>
-                        ) : (
-                          <div className="text-gray-400 text-xs italic">Queue empty</div>
-                        )}
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-                
-                {/* SCANNERS - SIDE BY SIDE */}
-                <div className="mt-3 border-t pt-2">
-                  <div className="grid grid-cols-2 gap-2">
-                    {/* BAG SCANNER SECTION */}
-                    <div>
-                      <h5 className="font-semibold text-sm">BAG SCANNER</h5>
-                      <div className="bg-gray-50 p-2 rounded min-h-[120px]">
-                        <div className="text-xs mb-1">Queue: {lane.bag_scanner.waiting_items.length} bags waiting</div>
-                        <div className="text-xs mb-1">Scanner: {lane.bag_scanner.current_items.length}/{lane.bag_scanner.capacity} slots</div>
-                        
-                        {lane.bag_scanner.current_items.length > 0 ? (
-                          <div className="bg-gray-100 p-1 rounded">
-                            {lane.bag_scanner.current_items.map(bagId => {
-                              const bag = gameState.bags.find(b => b.id === bagId);
-                              return bag ? (
-                                <div key={bagId} className="text-xs flex justify-between items-center mb-1">
-                                  <span className="truncate w-24">{bag.passenger_name}&apos;s bag</span>
-                                  <div className="w-16 bg-gray-200 rounded-full h-2">
-                                    <div 
-                                      className="bg-green-500 h-2 rounded-full" 
-                                      style={{width: `${Math.floor(lane.bag_scanner.current_scan_progress[bagId] || 0)}%`}}
-                                    ></div>
-                                  </div>
-                                  <span className="w-8 text-right">{Math.floor(lane.bag_scanner.current_scan_progress[bagId] || 0)}%</span>
-                                </div>
-                              ) : null;
-                            })}
-                          </div>
-                        ) : (
-                          <div className="text-gray-400 text-xs italic">No bags in scanner</div>
-                        )}
-                      </div>
-                    </div>
-                    
-                    {/* BODY SCANNER SECTION */}
-                    <div>
-                      <h5 className="font-semibold text-sm">BODY SCANNER</h5>
-                      <div className="bg-gray-50 p-2 rounded min-h-[120px]">
-                        <div className="text-xs mb-1">Scanner: {lane.person_scanner.current_items.length}/{lane.person_scanner.capacity} slots</div>
-                        
-                        {lane.person_scanner.current_items.length > 0 ? (
-                          <div className="bg-gray-100 p-1 rounded">
-                            {lane.person_scanner.current_items.map(personId => {
-                              const passenger = gameState.passengers.find(p => p.id === personId);
-                              return passenger ? (
-                                <div key={personId} className="text-xs flex justify-between items-center mb-1">
-                                  <span className="truncate w-24">{passenger.name}</span>
-                                  <div className="w-16 bg-gray-200 rounded-full h-2">
-                                    <div 
-                                      className="bg-green-500 h-2 rounded-full" 
-                                      style={{width: `${Math.floor(lane.person_scanner.current_scan_progress[personId] || 0)}%`}}
-                                    ></div>
-                                  </div>
-                                  <span className="w-8 text-right">{Math.floor(lane.person_scanner.current_scan_progress[personId] || 0)}%</span>
-                                </div>
-                              ) : null;
-                            })}
-                          </div>
-                        ) : (
-                          <div className="text-gray-400 text-xs italic">No people in scanner</div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* WAITING FOR BAGS SECTION */}
-                <div className="mt-3 border-t pt-2">
-                  <h5 className="font-semibold text-sm">WAITING FOR BAGS: {lane.passengers_waiting_for_bags.length}</h5>
-                  <div className="bg-gray-50 p-2 rounded min-h-[80px]">
-                    {lane.passengers_waiting_for_bags.length > 0 ? (
-                      <div>
-                        {lane.passengers_waiting_for_bags.map((passenger, idx) => (
-                          <div key={`${passenger.id}-waiting-${idx}`} className="text-xs py-1 border-b border-gray-100 last:border-0 flex justify-between items-center">
-                            <span>{passenger.name}</span>
-                            <div className="flex items-center">
-                              <span className="mr-2">{passenger.has_bag ? '🧳' : '🚶'}</span>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => debugPassengerJourney(passenger)}
-                                className="h-6 px-2 py-0 text-xs bg-gray-100"
-                              >
-                                Journey
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-gray-400 text-xs italic">No passengers waiting</div>
-                    )}
-                  </div>
-                </div>
-                
-                {/* COMPLETED SECTION */}
-                <div className="mt-3 border-t pt-2">
-                  <h5 className="font-semibold text-sm">COMPLETED: {lane.passengers_completed.length}</h5>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
-        
-        {/* Completed Passengers */}
-        <div className="mt-4 p-3 bg-gray-100 rounded">
-          <h3 className="font-bold">Completed Passengers ({gameState.completed.length})</h3>
-          <div className="text-sm mt-1 max-h-32 overflow-y-auto">
+
+        {/* Right Column - System Status */}
+        <div className="w-1/5 border-l border-gray-300 flex flex-col min-h-0 p-4">
+          {/* System Status */}
+          <h2 className="text-xl font-bold mb-3">SYSTEM STATUS</h2>
+          
+          {/* Histogram */}
+          <div className="mb-4 h-64 border border-gray-200 rounded p-2 bg-white">
+            <Histogram {...gameState} />
+          </div>
+          
+          <div className="grid grid-cols-1 gap-2 mb-4">
+            <div className="p-2 bg-gray-50 rounded">Completed Passengers: {gameState.completed.length}</div>
+          </div>
+          
+          <div className="text-sm max-h-32 overflow-y-auto bg-gray-50 p-2 rounded">
             {gameState.completed.slice(-5).map((passenger, idx) => (
-              <div key={`${passenger.id}-completed-${idx}`} className="text-xs flex justify-between items-center py-1">
-                <span>{passenger.name} ({passenger.nationality}) - {passenger.has_bag ? 'With bag' : 'No bag'}</span>
+              <div key={`${passenger.id}-completed-${idx}`} className="text-xs flex justify-between items-center py-1 border-b border-gray-100 last:border-0">
+                <PassengerLabel 
+                  passenger={passenger} 
+                  onClick={setSelectedPassenger}
+                  showDetails={true}
+                />
+              </div>
+            ))}
+            {gameState.completed.length > 5 && <div className="text-gray-500">...and {gameState.completed.length - 5} more</div>}
+          </div>
+
+          {/* Passenger Journey Info (when selected) */}
+          {selectedPassenger && (
+            <div className="mt-4 border-t border-gray-200 pt-4">
+              <div className="flex justify-between">
+                <h3 className="font-bold text-base mb-2">{selectedPassenger.name}&apos;s Journey</h3>
                 <Button 
-                  variant="outline" 
+                  variant="ghost" 
                   size="sm" 
-                  onClick={() => debugPassengerJourney(passenger)}
-                  className="h-6 px-2 py-0 text-xs bg-gray-100"
-                >
-                  Journey
+                  onClick={() => setSelectedPassenger(null)}
+                  className="h-7 px-2 py-0 text-xs"
+                  >
+                  &times;
                 </Button>
               </div>
-            ))}
-            {gameState.completed.length > 5 && <div className="text-xs text-gray-500">...and {gameState.completed.length - 5} more</div>}
-          </div>
-        </div>
-        
-        {/* Histogram */}
-        <div className="mt-4 p-3 bg-gray-100 rounded">
-          <div className="flex justify-between items-center mb-2">
-            <h3 className="font-bold">Passenger Processing Histogram</h3>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={clearHistogram}
-              className="h-7 px-2 py-1 text-xs bg-gray-100"
-            >
-              Clear Histogram
-            </Button>
-          </div>
-          {renderHistogram()}
+              
+              {/* Passenger Info */}
+              <div className="mb-3">
+                <div className="text-xs mb-1"><span className="font-medium">Nationality:</span> {selectedPassenger.nationality}</div>
+                <div className="text-xs mb-1"><span className="font-medium">Security Familiarity:</span> {selectedPassenger.security_familiarity}/10</div>
+                <div className="text-xs mb-1"><span className="font-medium">Has Bag:</span> {selectedPassenger.has_bag ? 'Yes' : 'No'}</div>
+              </div>
+              
+              {/* Journey Bar Chart */}
+              <div className="mb-3">
+                <JourneyBarChart passenger={selectedPassenger} />
+              </div>
+              
+              {/* Detailed Timeline */}
+              <div className="space-y-1 text-xs">
+                <div className="grid grid-cols-2 gap-1 p-1 bg-blue-50 rounded">
+                  <div><span className="font-medium">Main Queue Wait:</span></div>
+                  <div>{formatDuration(calculateDuration(selectedPassenger.spawned_timestamp, selectedPassenger.security_lane_queue_assigned_timestamp))}</div>
+                </div>
+                
+                {selectedPassenger.has_bag && (
+                  <>
+                    <div className="grid grid-cols-2 gap-1 p-1 bg-green-50 rounded">
+                      <div><span className="font-medium">Bag Unload:</span></div>
+                      <div>{formatDuration(calculateDuration(selectedPassenger.bag_unload_started_timestamp, selectedPassenger.bag_unload_completed_timestamp))}</div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-1 p-1 bg-yellow-50 rounded">
+                      <div><span className="font-medium">Bag Scan:</span></div>
+                      <div>{formatDuration(calculateDuration(selectedPassenger.bag_scanner_started_timestamp, selectedPassenger.bag_scanner_complete_timestamp))}</div>
+                    </div>
+                  </>
+                )}
+                
+                <div className="grid grid-cols-2 gap-1 p-1 bg-purple-50 rounded">
+                  <div><span className="font-medium">Body Scanner Queue:</span></div>
+                  <div>{formatDuration(calculateDuration(selectedPassenger.body_scanner_queue_joined_timestamp, selectedPassenger.body_scanner_started_timestamp))}</div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-1 p-1 bg-red-50 rounded">
+                  <div><span className="font-medium">Body Scan:</span></div>
+                  <div>{formatDuration(calculateDuration(selectedPassenger.body_scanner_started_timestamp, selectedPassenger.body_scanner_finished_timestamp))}</div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-1 p-1 bg-orange-50 rounded">
+                  <div><span className="font-medium">Waiting for Bag:</span></div>
+                  <div>{formatDuration(calculateDuration(selectedPassenger.waiting_for_bag_started_timestamp, selectedPassenger.waiting_for_bag_finished_timestamp))}</div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-1 p-1 bg-gray-100 rounded mt-2">
+                  <div><span className="font-medium">Total Time:</span></div>
+                  <div>{formatDuration(calculateDuration(selectedPassenger.spawned_timestamp, selectedPassenger.security_cleared_timestamp))}</div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+    </div>
+  );
+};
+
+// Helper component for the journey stacked bar chart
+const JourneyBarChart = ({ passenger }: { passenger: Passenger }) => {
+  // Calculate durations for each phase
+  const calculatePhaseDuration = (start?: number, end?: number) => {
+    if (!start || !end) return 0;
+    return (end - start) / 1000; // seconds
+  };
+  
+  // Define the journey phases and their colors
+  const phases = [
+    { 
+      name: 'Queue Wait', 
+      duration: calculatePhaseDuration(passenger.spawned_timestamp, passenger.security_lane_queue_assigned_timestamp),
+      color: 'bg-blue-300'
+    },
+    ...(passenger.has_bag ? [
+      { 
+        name: 'Bag Unload', 
+        duration: calculatePhaseDuration(passenger.bag_unload_started_timestamp, passenger.bag_unload_completed_timestamp),
+        color: 'bg-green-300'
+      },
+      { 
+        name: 'Bag Scan', 
+        duration: calculatePhaseDuration(passenger.bag_scanner_started_timestamp, passenger.bag_scanner_complete_timestamp),
+        color: 'bg-yellow-300'
+      }
+    ] : []),
+    { 
+      name: 'Body Scan Queue', 
+      duration: calculatePhaseDuration(passenger.body_scanner_queue_joined_timestamp, passenger.body_scanner_started_timestamp),
+      color: 'bg-purple-300'
+    },
+    { 
+      name: 'Body Scan', 
+      duration: calculatePhaseDuration(passenger.body_scanner_started_timestamp, passenger.body_scanner_finished_timestamp),
+      color: 'bg-red-300'
+    },
+    { 
+      name: 'Waiting for Bag', 
+      duration: calculatePhaseDuration(passenger.waiting_for_bag_started_timestamp, passenger.waiting_for_bag_finished_timestamp),
+      color: 'bg-orange-300'
+    }
+  ].filter(phase => phase.duration > 0);
+  
+  // Calculate total journey time
+  const totalTime = phases.reduce((sum, phase) => sum + phase.duration, 0);
+  
+  // If no journey data yet
+  if (totalTime === 0) {
+    return <div className="text-center py-4">No journey data available yet.</div>;
+  }
+  
+  return (
+    <div className="w-full">
+      <div className="mb-2 text-sm font-medium">Journey Time Breakdown</div>
+      
+      {/* Stacked bar chart */}
+      <div className="h-10 w-full flex rounded-md overflow-hidden">
+        {phases.map((phase, index) => {
+          const widthPercent = (phase.duration / totalTime) * 100;
+          return (
+            <div 
+              key={index}
+              className={`${phase.color} relative group`}
+              style={{ width: `${widthPercent}%` }}
+            >
+              {/* Tooltip */}
+              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 hidden group-hover:block bg-black text-white text-xs p-1 rounded whitespace-nowrap">
+                {phase.name}: {phase.duration.toFixed(1)}s ({widthPercent.toFixed(1)}%)
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      
+      {/* Legend */}
+      <div className="mt-3 flex flex-wrap gap-2">
+        {phases.map((phase, index) => (
+          <div key={index} className="flex items-center text-xs">
+            <div className={`w-3 h-3 ${phase.color} mr-1 rounded-sm`}></div>
+            <span>{phase.name}: {phase.duration.toFixed(1)}s</span>
+          </div>
+        ))}
+      </div>
+      
+      <div className="mt-3 text-sm">Total journey time: {totalTime.toFixed(1)} seconds</div>
+    </div>
+  );
+};
+
+// Helper component for passenger labels
+const PassengerLabel = ({ 
+  passenger, 
+  onClick, 
+  showDetails = true 
+}: { 
+  passenger: Passenger, 
+  onClick: (passenger: Passenger) => void,
+  showDetails?: boolean 
+}) => {
+  return (
+    <div 
+      className="flex items-center justify-between cursor-pointer hover:bg-gray-50 p-1 rounded"
+      onClick={() => onClick(passenger)}
+    >
+      <span className="truncate">{passenger.name}{showDetails ? ` (${passenger.nationality})` : ''}</span>
+      <span className="ml-1">{passenger.has_bag ? '🧳' : '🚶'}</span>
     </div>
   );
 };

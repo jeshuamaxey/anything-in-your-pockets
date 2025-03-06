@@ -185,6 +185,7 @@ export interface Scanner {
   scan_accuracy: number; // Accuracy of the scanner (0-100%)
   last_processed_time: number; // Last time the scanner processed items (in ms)
   waiting_items: string[]; // IDs of items waiting to be scanned
+  current_scan_time_needed?: Record<string, number>; // Time needed to complete scan for each item (in seconds)
 }
 
 // Security Lane definition
@@ -217,7 +218,6 @@ export interface GameState {
   completed: Passenger[]; // Passengers that have completed security
   rejected: Passenger[]; // Passengers that have been rejected
   time: number; // Game time in seconds
-  score: number;
   spawn_rate: number; // Passengers per minute that spawn
   last_spawn_time: number; // Last time a passenger was spawned (in ms)
   paused: boolean; // Whether the game is paused

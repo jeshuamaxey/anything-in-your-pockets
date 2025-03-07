@@ -5,6 +5,7 @@ import { generatePassengerId } from "./game-utils";
 import { generateRandomPassenger } from "./game-generators";
 import { generateRandomBag } from "./game-generators";
 import { getTick } from "./game-loop";
+import { playAssignSound, startAmbientSound, isAmbientSoundEnabled } from "./audio-utils";
 
 export const startGame = (gameState: GameState, setGameState: Dispatch<SetStateAction<GameState>>, gameLoopRef: RefObject<NodeJS.Timeout | null>) => {
   if(gameState.time === 0) {
@@ -24,6 +25,8 @@ export const startGame = (gameState: GameState, setGameState: Dispatch<SetStateA
   // Start the game loop
   const tick = getTick(gameState, setGameState);
   gameLoopRef.current = setInterval(tick, GAME_TICK_MS);
+
+  if(isAmbientSoundEnabled()) startAmbientSound();
 }
 
 // Helper function to create and add a passenger to the game state
@@ -112,6 +115,8 @@ export const assignPassengerToLane = (gameState: GameState, setGameState: (gameS
       newLane.total_added--;
     }
   }
+
+  playAssignSound();
   
   // Update the game state
   setGameState(newGameState);

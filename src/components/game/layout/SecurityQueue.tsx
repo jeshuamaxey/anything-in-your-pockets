@@ -5,6 +5,7 @@ import { PassengerLabel } from "../common/PassengerLabel";
 import { Button } from "@/components/ui/button";
 import { MAX_QUEUE_DISPLAY_LENGTH } from "@/lib/game-constants";
 import { assignPassengerToLane } from "@/lib/game-logic";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface SecurityQueueProps {
   gameState: GameState;
@@ -20,6 +21,11 @@ const SecurityQueue = ({
   // Get a limited number of passengers from the main queue to display
   const getDisplayPassengers = () => {
     return gameState.main_queue.getAll().slice(0, MAX_QUEUE_DISPLAY_LENGTH); // Only show up to 5 passengers
+  };
+
+  // Handle assigning passenger with sound
+  const handleAssignPassenger = (passengerId: string, laneId: string) => {
+    assignPassengerToLane(gameState, setGameState, passengerId, laneId);
   };
 
   return <>
@@ -48,34 +54,46 @@ const SecurityQueue = ({
 
     {/* Scrollable Queue List */}
     <div className="flex-1 max-h-[calc(100%-100px)] overflow-y-auto p-2">
-      {getDisplayPassengers().map((passenger, index) => (
-        <div key={`${passenger.id}-${index}`} className="p-2 bg-white border border-gray-300 text-sm mb-2">
-          <PassengerLabel 
-            passenger={passenger} 
-            onClick={setSelectedPassenger}
-          />
-          <div className="mt-1">
-            <div className="text-xs font-semibold mb-1">Assign to lane:</div>
-            <div className="flex flex-row flex-wrap gap-1">
-              {gameState.security_lanes.slice(0, 2).map(lane => {
-                const laneIsDisabled = lane.lane_line.length >= LANE_LINE_CAPACITY;
-                return (
-                  <Button 
-                    key={lane.id}
-                    variant="outline"
-                    disabled={laneIsDisabled}
-                    size="sm"
-                    onClick={() => assignPassengerToLane(gameState, setGameState, passenger.id, lane.id)}
-                    className="h-7 px-2 py-1 text-xs"
-                  >
-                    {laneIsDisabled ? '🔴' : '🟢'} {lane.name}
-                  </Button>
-                )})}
+      <AnimatePresence>
+        {getDisplayPassengers().map((passenger) => (
+          <motion.div 
+            key={passenger.id}
+            className="p-2 flex gap-2 items-center justify-between bg-white border border-gray-300 text-sm mb-2"
+            initial={{ opacity: 0, x: -20, height: 0 }}
+            animate={{ opacity: 1, x: 0, height: 'auto' }}
+            exit={{ opacity: 0, x: 20, height: 0 }}
+            transition={{ 
+              duration: 0.15,
+              height: { duration: 0.1 }
+            }}
+          >
+            <PassengerLabel 
+              passenger={passenger} 
+              onClick={setSelectedPassenger}
+            />
+            <div className="flex gap-1 items-center">
+              <div className="text-xs font-semibold">Assign:</div>
+              <div className="flex flex-row flex-wrap gap-1">
+                {gameState.security_lanes.slice(0, 2).map(lane => {
+                  const laneIsDisabled = lane.lane_line.length >= LANE_LINE_CAPACITY;
+                  return (
+                    <Button 
+                      key={lane.id}
+                      variant="secondary"
+                      disabled={laneIsDisabled}
+                      size="sm"
+                      onClick={() => handleAssignPassenger(passenger.id, lane.id)}
+                      className="h-6 px-2 p-1 text-xs cursor-pointer"
+                    >
+                      {laneIsDisabled ? '🔴' : '🟢'} {lane.name}
+                    </Button>
+                  )})}
+              </div>
             </div>
-          </div>
-        </div>
-      ))}
-    {gameState.main_queue.length > MAX_QUEUE_DISPLAY_LENGTH && (
+          </motion.div>
+        ))}
+      </AnimatePresence>
+      {gameState.main_queue.length > MAX_QUEUE_DISPLAY_LENGTH && (
         <div className="p-2 bg-gray-200 rounded text-sm text-center">
           +{gameState.main_queue.length - MAX_QUEUE_DISPLAY_LENGTH} more passengers
         </div>

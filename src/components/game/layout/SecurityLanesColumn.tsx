@@ -18,19 +18,6 @@ export const SecurityLanesColumn = ({
   // Debug a lane
   const debugLane = (lane: SecurityLane) => {
     console.log('Lane:', lane);
-    
-    // Format the lane data for display
-    // const laneInfo = `
-    //   Lane: ${lane.name}
-    //   Lane Line: ${lane.lane_line.length}
-    //   Bag Drop Line: ${lane.bag_drop_line.length}
-    //   Bag Drop Unload: ${lane.bag_drop_unload.length}
-    //   Body Scanner Line: ${lane.body_scan_line.length}
-    //   Bag Pickup Area: ${lane.bag_pickup_area.length}
-    //   Processing: ${countPassengersInLane(lane)}
-    // `;
-    
-    // alert(laneInfo);
   };
 
   return (
@@ -38,7 +25,7 @@ export const SecurityLanesColumn = ({
       {/* Security Lanes */}
       <div className="flex flex-col">
         {/* Security Lanes */}
-        {gameState.security_lanes.slice(0, 2).map((lane, laneIndex) => {
+        {gameState.security_lanes.map((lane, laneIndex) => {
           return (
           <div key={`${lane.id}-${laneIndex}`} className="col-span-1 border first:border-t-0 border-l-0 border-b-0 border-gray-300">
             {/* Header */}
@@ -52,7 +39,7 @@ export const SecurityLanesColumn = ({
             </div>
             
             {/* Lane layout based on wireframe - 2 rows, 4 columns with arrows */}
-            <div className="flex flex-col gap-0 min-h-[450px] p-2 pt-0 relative">
+            <div className="flex flex-col gap-0 p-2 pt-0 relative">
               {/* Top Row - Passenger Flow */}
               <div className="grid grid-cols-4 gap-0 h-[200px]">
                 {/* Lane Line */}

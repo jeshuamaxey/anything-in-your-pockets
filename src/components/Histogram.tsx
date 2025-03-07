@@ -39,7 +39,7 @@ export const Histogram = (gameState: GameState) => {
           {histogramEntries.map(([, count], index) => (
             <div key={index} className="flex flex-col items-center flex-shrink-0">
               <div 
-                className={`w-2 ${index === 0 ? 'bg-green-500/50' : 'bg-green-500'}`}
+                className={`w-4 ${index === 0 ? 'bg-green-500/50' : 'bg-green-500'}`}
                 style={{ height: `${getBarHeight(count as number)}px` }}
               >
                 <div className="text-white text-xs text-center font-bold">

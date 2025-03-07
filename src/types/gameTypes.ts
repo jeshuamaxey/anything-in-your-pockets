@@ -1,3 +1,5 @@
+import { Nationality } from "@/game-data/nationalities";
+
 // Type definitions
 export type Sex = 'male' | 'female';
 export type PresentingGender = 'male' | 'female' | 'ambiguous';
@@ -8,7 +10,7 @@ export type SecurityAgentRank = 'jnr' | 'mid' | 'snr' | 'supervisor';
 export interface Passenger {
   id: string;
   name: string;
-  nationality: string;
+  nationality: Nationality;
   security_familiarity: number; // 0 to 10
   sex: Sex;
   presenting_gender: PresentingGender;
@@ -61,9 +63,13 @@ export interface SecurityAgent {
 // Queue definition - an ordered array of passengers
 export class Queue {
   private passengers: Passenger[];
-  
-  constructor() {
+  public capacity: number;
+  public id: string;
+
+  constructor({capacity, id}: {capacity: number, id: string}) {
     this.passengers = [];
+    this.capacity = capacity;
+    this.id = id;
   }
   
   // Add a passenger to the end of the queue
@@ -73,6 +79,10 @@ export class Queue {
     const existingPassenger = this.passengers.find(p => p.id === passenger.id);
     if (existingPassenger) {
       console.warn(`Passenger ${passenger.id} is already in the queue!`);
+      return;
+    }
+    if(this.passengers.length >= this.capacity) {
+      console.warn(`Queue ${this.id} is at capacity!`);
       return;
     }
     this.passengers.push(passenger);
@@ -119,9 +129,11 @@ export class Queue {
 // Bag Queue definition - an ordered array of bags
 export class BagQueue {
   private bags: Bag[];
+  public id: string;
   
-  constructor() {
+  constructor({id}: {id: string}) {
     this.bags = [];
+    this.id = id;
   }
   
   // Add a bag to the end of the queue
@@ -192,20 +204,20 @@ export interface Scanner {
 export interface SecurityLane {
   id: string;
   name: string;
-  security_agents: SecurityAgent[]; // Array of agents assigned to this lane
-  passenger_queue: Queue; // Main queue of passengers waiting to be processed
-  bag_scanner: Scanner; // Scanner for bags
-  person_scanner: Scanner; // Scanner for people
-  bag_inspection_queue: BagQueue; // Queue of bags flagged for manual inspection
-  is_open: boolean; // Whether the lane is currently open
-  processing_capacity: number; // Maximum number of passengers that can be processed simultaneously
-  current_processing_count: number; // Current number of passengers being processed
-  passengers_in_body_scanner_queue: Passenger[]; // Passengers waiting for body scan
-  passengers_waiting_for_bags: Passenger[]; // Passengers who have completed body scan and are waiting for their bags
-  passengers_completed: Passenger[]; // Passengers who have completed the security process in this lane
-  bag_unloading_bays: number; // Number of positions at the front of the queue where passengers can unload bags
-  passengers_unloading_bags: Passenger[]; // Passengers currently unloading their bags
-  bag_scanner_queue: Passenger[]; // Passengers who have been dequeued from main queue and are waiting to unload bags
+  security_agents: SecurityAgent[];
+  passenger_queue: Queue;
+  bag_scanner: Scanner;
+  person_scanner: Scanner;
+  bag_inspection_queue: BagQueue;
+  is_open: boolean;
+  processing_capacity: number;
+  current_processing_count: number;
+  passengers_in_body_scanner_queue: Passenger[];
+  passengers_waiting_for_bags: Passenger[];
+  passengers_completed: Passenger[];
+  bag_unloading_bays: number;
+  passengers_unloading_bags: Passenger[];
+  bag_scanner_queue: Passenger[];
 }
 
 // Game state

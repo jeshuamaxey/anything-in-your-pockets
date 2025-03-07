@@ -16,10 +16,10 @@ export const BAG_DROP_UNLOAD_CAPACITY = 3; // Maximum number of bags in the bag 
 export const BODY_SCANNER_LINE_CAPACITY = 6; // Maximum number of bags that can be scanned simultaneously
 export const BAG_PICKUP_AREA_CAPACITY = 100; // Maximum number of bags in the bag pickup area
 
-export const BAG_SCANNER_WAITING_CAPACITY = 3; // Maximum number of bags that can be waiting to be scanned
+export const BAG_SCANNER_WAITING_CAPACITY = 4; // Maximum number of bags that can be waiting to be scanned
 export const BAG_SCANNER_SCANNING_CAPACITY = 2; // Maximum number of bags that can be scanned simultaneously
 
 export const BODY_SCANNER_WAITING_CAPACITY = 1; // NOT_USED::Maximum number of people that can be waiting to be scanned (not used)
 export const BODY_SCANNER_SCANNING_CAPACITY = 1; // Maximum number of people that can be scanned simultaneously
 
-export const PROPORTION_OF_PASSENGERS_WITH_BAGS = 1; // chance per spawned passenger
+export const PROPORTION_OF_PASSENGERS_WITH_BAGS = 0.8; // chance per spawned passenger

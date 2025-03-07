@@ -1,7 +1,7 @@
 import { Bag, GameState, Passenger, SecurityLane } from "@/types/gameTypes";
 import { HISTOGRAM_INTERVAL } from "./game-constants";
 
-export const debugLog = (laneId: string, message: string, ...args: any[]) => {
+export const debugLog = (laneId: string, message: string, ...args: unknown[]) => {
   return;
   
   if (laneId === 'lane_1') {

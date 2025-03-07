@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { 
   Passenger,
 } from '@/types/gameTypes';
@@ -19,6 +19,26 @@ const Game = () => {
   const [selectedPassenger, setSelectedPassenger] = useState<Passenger | null>(null);
   const [showOverlay, setShowOverlay] = useState(true);
   
+  // Toggle game (start/pause) - move this before the useEffect that uses it
+  const toggleGame = useCallback(() => {
+    // Don't allow toggling while overlay is shown
+    if (showOverlay) return;
+
+    if (gameLoopRef.current) {
+      // Game is running, pause it
+      clearInterval(gameLoopRef.current);
+      gameLoopRef.current = null;
+      
+      setGameState(prevState => ({
+        ...prevState,
+        paused: true
+      }));
+    } else {
+      // Kickoff the game
+      startGame(gameState, setGameState, gameLoopRef);
+    }
+  }, [gameState, setGameState, showOverlay]);
+
   // Add keyboard event listener
   useEffect(() => {
     const handleKeyPress = (event: KeyboardEvent) => {
@@ -58,7 +78,7 @@ const Game = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyPress);
     };
-  }, [gameState, setGameState]);
+  }, [gameState, setGameState, toggleGame]);
 
   // Ensure the game is properly initialized
   useEffect(() => {
@@ -67,27 +87,7 @@ const Game = () => {
       ...prevState,
       paused: true
     }));
-  }, []); // Empty dependency array - only run once on mount
-  
-  // Toggle game (start/pause)
-  const toggleGame = () => {
-    // Don't allow toggling while overlay is shown
-    if (showOverlay) return;
-
-    if (gameLoopRef.current) {
-      // Game is running, pause it
-      clearInterval(gameLoopRef.current);
-      gameLoopRef.current = null;
-      
-      setGameState(prevState => ({
-        ...prevState,
-        paused: true
-      }));
-    } else {
-      // Kickoff the game
-      startGame(gameState, setGameState, gameLoopRef);
-    }
-  };
+  }, [setGameState]); // Add setGameState to dependency array
   
   // Clean up on unmount
   useEffect(() => {

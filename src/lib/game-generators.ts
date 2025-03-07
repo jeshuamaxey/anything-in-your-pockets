@@ -1,5 +1,6 @@
 import { nationalities, Nationality } from "@/game-data/nationalities";
 import { Bag, Passenger } from "@/types/gameTypes";
+import { PROPORTION_OF_PASSENGERS_WITH_BAGS } from "./game-constants";
 
 // Generate a random passenger
 export const generateRandomPassenger = (id: string): Passenger => {
@@ -9,6 +10,7 @@ export const generateRandomPassenger = (id: string): Passenger => {
   return {
     id,
     name: `Passenger ${id.substring(id.length - 3)}`,
+    emoji: presentingGender === 'male' ? '👨' : presentingGender === 'female' ? '👩' : '🧒',
     nationality: getRandomNationality(),
     security_familiarity: Math.floor(Math.random() * 11),
     sex,
@@ -16,8 +18,10 @@ export const generateRandomPassenger = (id: string): Passenger => {
     preferred_security_agent_gender: Math.random() > 0.8 
       ? (Math.random() > 0.5 ? 'male' : 'female') 
       : null,
-    has_bag: Math.random() > 0.1, // 90% of passengers have bags
-    waiting_since: undefined
+    has_bag: Math.random() < PROPORTION_OF_PASSENGERS_WITH_BAGS, // 90% of passengers have bags
+    waiting_since: undefined,
+    bag: null,
+    bag_on_person: false
   };
 };
 

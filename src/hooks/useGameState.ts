@@ -1,11 +1,18 @@
 import { Dispatch, SetStateAction, useState } from "react";
-import { GameState, SecurityAgent, SecurityLane, Scanner, Queue, BagQueue } from "@/types/gameTypes";
-import { INITIAL_SPAWN_RATE, SECURITY_LANE_QUEUE_CAPACITY, SECURITY_QUEUE_CAPACITY } from "@/lib/game-constants";
+import { GameState, SecurityAgent, SecurityLane, Scanner, Queue, Bag, Passenger } from "@/types/gameTypes";
+import {
+  BAG_DROP_LINE_CAPACITY,
+  BAG_PICKUP_AREA_CAPACITY,
+  BODY_SCANNER_LINE_CAPACITY,
+  INITIAL_SPAWN_RATE,
+  LANE_LINE_CAPACITY,
+  MAIN_LINE_CAPACITY
+} from "@/lib/game-constants";
 
 // Initialize a new game state
 const initializeGameState = (): GameState => {
   // Create initial security agents
-  const securityAgents: SecurityAgent[] = [
+  const securityAgents: SecurityAgent[] = [ 
     {
       id: 'agent_1',
       name: 'Agent Smith',
@@ -57,18 +64,18 @@ const initializeGameState = (): GameState => {
   ];
 
   // Create initial scanners
-  const createScanner = (id: string, name: string, type: 'bag' | 'person'): Scanner => ({
+  const createScanner = <T extends {id: string}>(id: string, name: string, type: 'bag' | 'person'): Scanner<T> => ({
     id,
     name,
     type,
     is_operational: true,
     items_per_minute: type === 'bag' ? 10 : 0, // Only used for bag scanners now
-    current_items: [],
+    current_items: new Queue<T>({capacity: 1, id: `current_items_${id}`}),
     capacity: type === 'bag' ? 3 : 1, // Bag scanner can handle more items simultaneously
     current_scan_progress: {},
     scan_accuracy: 95,
     last_processed_time: Date.now(),
-    waiting_items: [],
+    waiting_items: new Queue<T>({capacity: 1, id: `waiting_items_${id}`}),
     current_scan_time_needed: {},
   });
 
@@ -78,19 +85,22 @@ const initializeGameState = (): GameState => {
       id: info.id,
       name: info.name,
       security_agents: [securityAgents[index], securityAgents[index + 1]],
-      passenger_queue: new Queue({capacity: SECURITY_LANE_QUEUE_CAPACITY, id: `passenger_queue_${info.id}`}),
-      bag_scanner: createScanner(`bag_scanner_${info.id}`, `Bag Scanner ${index}`, 'bag'),
-      person_scanner: createScanner(`person_scanner_${info.id}`, `Person Scanner ${index}`, 'person'),
-      bag_inspection_queue: new BagQueue({id: `bag_inspection_queue_${info.id}`}),
       is_open: true,
-      processing_capacity: 5,
-      current_processing_count: 0,
-      passengers_in_body_scanner_queue: [],
-      passengers_waiting_for_bags: [],
-      passengers_completed: [],
-      bag_unloading_bays: 3, // 3 positions at the front of the queue can unload bags
+      
+      lane_line: new Queue({capacity: LANE_LINE_CAPACITY, id: `lane_line_${info.id}`}),
+      bag_drop_line: new Queue({capacity: BAG_DROP_LINE_CAPACITY, id: `bag_drop_line_${info.id}`}),
+      bag_drop_unload: new Queue({capacity: BAG_DROP_LINE_CAPACITY, id: `bag_drop_unload_${info.id}`}),
+      body_scan_line: new Queue({capacity: BODY_SCANNER_LINE_CAPACITY, id: `body_scan_line_${info.id}`}),
+      bag_pickup_area: new Queue({capacity: BAG_PICKUP_AREA_CAPACITY, id: `bag_pickup_area_${info.id}`}),
+
+      bag_scanner: createScanner<Bag>(`bag_scanner_${info.id}`, `Bag Scanner ${index}`, 'bag'),
+      body_scanner: createScanner<Passenger>(`body_scanner_${info.id}`, `Body Scanner ${index}`, 'person'),
+      bag_scanner_off_ramp: new Queue({capacity: BAG_PICKUP_AREA_CAPACITY, id: `bag_scanner_off_ramp_${info.id}`}),
+
+      bag_unloading_bays: 3,
       passengers_unloading_bags: [],
-      bag_scanner_queue: [] // Initialize the bag scanner queue as an empty array
+      passengers_in_body_scanner_queue: [],
+      passengers_completed: []
     })
   );
 
@@ -100,7 +110,7 @@ const initializeGameState = (): GameState => {
     bags: [],
     security_agents: securityAgents,
     security_lanes: securityLanes,
-    main_queue: new Queue({capacity: SECURITY_QUEUE_CAPACITY, id: 'main_queue'}),
+    main_queue: new Queue({capacity: MAIN_LINE_CAPACITY, id: 'main_queue'}),
     completed: [],
     rejected: [],
     time: 0,

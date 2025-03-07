@@ -10,12 +10,15 @@ export type SecurityAgentRank = 'jnr' | 'mid' | 'snr' | 'supervisor';
 export interface Passenger {
   id: string;
   name: string;
+  emoji: string;
   nationality: Nationality;
   security_familiarity: number; // 0 to 10
   sex: Sex;
   presenting_gender: PresentingGender;
   preferred_security_agent_gender: PreferredSecurityAgentGender;
   has_bag: boolean; // Whether the passenger has a bag
+  bag: Bag | null;
+  bag_on_person: boolean; // Whether the bag is on the person
   waiting_since?: number; // Timestamp when the passenger started waiting for bags
   unloading_bag?: boolean; // Whether the passenger is currently unloading their bag
   unloading_progress?: number; // Progress of unloading bag (0-100%)
@@ -61,142 +64,99 @@ export interface SecurityAgent {
 }
 
 // Queue definition - an ordered array of passengers
-export class Queue {
-  private passengers: Passenger[];
+export class Queue<T extends {id: string}> {
+  private items: T[];
   public capacity: number;
   public id: string;
 
   constructor({capacity, id}: {capacity: number, id: string}) {
-    this.passengers = [];
+    if(capacity < 1) {
+      throw new Error('Capacity must be at least 1');
+    }
+
+    this.items = [];
     this.capacity = capacity;
     this.id = id;
   }
   
   // Add a passenger to the end of the queue
-  enqueue(passenger: Passenger): void {
-    console.log(`Queue.enqueue called for passenger ${passenger.id}`);
+  enqueue(item: T): void {
     // Check if passenger is already in the queue
-    const existingPassenger = this.passengers.find(p => p.id === passenger.id);
-    if (existingPassenger) {
-      console.warn(`Passenger ${passenger.id} is already in the queue!`);
+    const existingItem = this.items.find(existingItem => existingItem.id === item.id);
+    if (existingItem) {
+      console.warn(`Item ${item.id} is already in the queue!`);
       return;
     }
-    if(this.passengers.length >= this.capacity) {
+    if(this.items.length === this.capacity) {
       console.warn(`Queue ${this.id} is at capacity!`);
       return;
     }
-    this.passengers.push(passenger);
+    this.items.push(item);
   }
   
   // Remove and return the passenger from the front of the queue
-  dequeue(): Passenger | undefined {
-    return this.passengers.shift();
+  dequeue(): T | undefined {
+    return this.items.shift();
   }
   
   // Look at the passenger at the front of the queue without removing
-  peek(): Passenger | undefined {
-    return this.passengers[0];
+  peek(): T | undefined {
+    return this.items[0];
   }
   
   // Get the number of passengers in the queue
   get length(): number {
-    return this.passengers.length;
+    return this.items.length;
   }
   
   // Check if the queue is empty
   isEmpty(): boolean {
-    return this.passengers.length === 0;
+    return this.items.length === 0;
   }
   
   // Get all passengers in the queue
-  getAll(): Passenger[] {
-    return [...this.passengers];
+  getAll(): T[] {
+    return [...this.items];
   }
   
   // Find a passenger by ID
-  findById(id: string): Passenger | undefined {
-    return this.passengers.find(passenger => passenger.id === id);
+  findById(id: string): T | undefined {
+    return this.items.find(item => item.id === id);
   }
   
   // Remove a passenger by ID
   removeById(id: string): boolean {
-    const initialLength = this.passengers.length;
-    this.passengers = this.passengers.filter(passenger => passenger.id !== id);
-    return initialLength !== this.passengers.length;
+    const initialLength = this.items.length;
+    this.items = this.items.filter(item => item.id !== id);
+    return initialLength !== this.items.length;
   }
 }
 
 // Bag Queue definition - an ordered array of bags
-export class BagQueue {
-  private bags: Bag[];
-  public id: string;
-  
-  constructor({id}: {id: string}) {
-    this.bags = [];
-    this.id = id;
-  }
-  
-  // Add a bag to the end of the queue
-  enqueue(bag: Bag): void {
-    this.bags.push(bag);
-  }
-  
-  // Remove and return the bag from the front of the queue
-  dequeue(): Bag | undefined {
-    return this.bags.shift();
-  }
-  
-  // Look at the bag at the front of the queue without removing
-  peek(): Bag | undefined {
-    return this.bags[0];
-  }
-  
-  // Get the number of bags in the queue
-  get length(): number {
-    return this.bags.length;
-  }
-  
-  // Check if the queue is empty
-  isEmpty(): boolean {
-    return this.bags.length === 0;
-  }
-  
-  // Get all bags in the queue
-  getAll(): Bag[] {
-    return [...this.bags];
-  }
-  
-  // Find a bag by ID
-  findById(id: string): Bag | undefined {
-    return this.bags.find(bag => bag.id === id);
+export class BagQueue extends Queue<Bag> {
+  constructor({capacity, id}: {capacity: number, id: string}) {
+    super({capacity, id});
   }
   
   // Find bags by passenger ID
   findByPassengerId(passengerId: string): Bag[] {
-    return this.bags.filter(bag => bag.passenger_id === passengerId);
-  }
-  
-  // Remove a bag by ID
-  removeById(id: string): boolean {
-    const initialLength = this.bags.length;
-    this.bags = this.bags.filter(bag => bag.id !== id);
-    return initialLength !== this.bags.length;
+    return this.getAll().filter(bag => bag.passenger_id === passengerId);
   }
 }
 
 // Scanner definition
-export interface Scanner {
+export interface Scanner<T extends {id: string}> {
   id: string;
   name: string;
   type: 'bag' | 'person';
   is_operational: boolean;
   items_per_minute: number; // Number of items that can be processed per minute
-  current_items: string[]; // IDs of items currently being scanned
+  current_items: Queue<T>; // Items currently being scanned
   capacity: number; // Maximum number of items that can be scanned simultaneously
   current_scan_progress: Record<string, number>; // Progress of current scans (0-100%) by item ID
   scan_accuracy: number; // Accuracy of the scanner (0-100%)
   last_processed_time: number; // Last time the scanner processed items (in ms)
-  waiting_items: string[]; // IDs of items waiting to be scanned
+  waiting_items: Queue<T>; // IDs of items waiting to be scanned
   current_scan_time_needed?: Record<string, number>; // Time needed to complete scan for each item (in seconds)
 }
 
@@ -205,19 +165,24 @@ export interface SecurityLane {
   id: string;
   name: string;
   security_agents: SecurityAgent[];
-  passenger_queue: Queue;
-  bag_scanner: Scanner;
-  person_scanner: Scanner;
-  bag_inspection_queue: BagQueue;
   is_open: boolean;
-  processing_capacity: number;
-  current_processing_count: number;
-  passengers_in_body_scanner_queue: Passenger[];
-  passengers_waiting_for_bags: Passenger[];
-  passengers_completed: Passenger[];
+  
+  lane_line: Queue<Passenger>;
+  bag_drop_line: Queue<Passenger>;
+  bag_drop_unload: Queue<Passenger>;
+  body_scan_line: Queue<Passenger>;
+  body_scanner: Scanner<Passenger>;
+  bag_pickup_area: Queue<Passenger>;
+  
+  bag_scanner: Scanner<Bag>;
+  bag_scanner_off_ramp: Queue<Bag>;
+
   bag_unloading_bays: number;
   passengers_unloading_bags: Passenger[];
-  bag_scanner_queue: Passenger[];
+  
+  passengers_in_body_scanner_queue: Passenger[];
+  // passengers_waiting_for_bags: Passenger[];
+  passengers_completed: Passenger[];
 }
 
 // Game state
@@ -226,7 +191,7 @@ export interface GameState {
   bags: Bag[];
   security_agents: SecurityAgent[];
   security_lanes: SecurityLane[]; // Array of security lanes
-  main_queue: Queue; // Main queue of passengers waiting to be assigned to a lane
+  main_queue: Queue<Passenger>; // Main queue of passengers waiting to be assigned to a lane
   completed: Passenger[]; // Passengers that have completed security
   rejected: Passenger[]; // Passengers that have been rejected
   time: number; // Game time in seconds

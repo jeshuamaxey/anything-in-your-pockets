@@ -21,7 +21,7 @@ const SystemStatusColumn = ({
     <h2 className="text-xl font-bold mb-3">SYSTEM STATUS</h2>
     
     {/* Histogram */}
-    <div className="mb-4 h-64 border border-gray-200 rounded p-2 bg-white">
+    <div className="mb-4 h-64 bg-white">
       <Histogram {...gameState} />
     </div>
     

@@ -3,6 +3,7 @@ import { Passenger, SecurityLane, GameState } from '@/types/gameTypes';
 import { PassengerLabel } from '../common/PassengerLabel';
 import { countPassengersInLane } from '@/lib/game-utils';
 import { Button } from '@/components/ui/button';
+import { BagLabel } from '../common/BagLabel';
 
 interface SecurityLanesColumnProps {
   gameState: GameState;
@@ -21,12 +22,13 @@ export const SecurityLanesColumn = ({
     // Format the lane data for display
     const laneInfo = `
       Lane: ${lane.name}
-      Queue Length: ${lane.passenger_queue.length}
-      Bag Scanner Queue: ${lane.bag_scanner_queue.length}
-      Body Scanner Queue: ${lane.passengers_in_body_scanner_queue.length}
-      Waiting for Bags: ${lane.passengers_waiting_for_bags.length}
+      Lane Line: ${lane.lane_line.length}
+      Bag Drop Line: ${lane.bag_drop_line.length}
+      Bag Drop Unload: ${lane.bag_drop_unload.length}
+      Body Scanner Line: ${lane.body_scan_line.length}
+      Bag Pickup Area: ${lane.bag_pickup_area.length}
       Completed: ${lane.passengers_completed.length}
-      Processing: ${lane.current_processing_count}/${lane.processing_capacity}
+      Processing: ${countPassengersInLane(lane)}
     `;
     
     alert(laneInfo);
@@ -37,9 +39,11 @@ export const SecurityLanesColumn = ({
       {/* Security Lanes */}
       <div className="flex flex-col">
         {/* Security Lanes */}
-        {gameState.security_lanes.slice(0, 2).map((lane, laneIndex) => (
-          <div key={`${lane.id}-${laneIndex}`} className="col-span-1 border first:border-t-0 border-l-0 border-b-0 border-gray-300 p-2">
-            <div className="flex justify-between items-center mb-3">
+        {gameState.security_lanes.slice(0, 2).map((lane, laneIndex) => {
+          return (
+          <div key={`${lane.id}-${laneIndex}`} className="col-span-1 border first:border-t-0 border-l-0 border-b-0 border-gray-300">
+            {/* Header */}
+            <div className="flex justify-between items-center mb-2 p-2">
               <div className="flex gap-2 items-center">
                 <h2 className="text font-bold">{lane.name}</h2>
                 <p className="text-xs text-gray-500">Passengers in lane: {countPassengersInLane(lane)}</p>
@@ -54,39 +58,24 @@ export const SecurityLanesColumn = ({
               </Button>
             </div>
             
-            {/* Lane layout based on wireframe - 4 column layout */}
-            <div className="grid grid-cols-4 gap-2 min-h-[450px]">
-              {/* Column 1: Lane Queue (full height) */}
-              <div className="col-span-1 border border-gray-200 rounded p-2 h-full">
-                <h3 className="font-semibold text-sm mb-2">Lane queue</h3>
-                <div className="bg-gray-50 p-2 rounded h-[calc(100%-2rem)]">
+            {/* Lane layout based on wireframe - 2 rows, 4 columns with arrows */}
+            <div className="flex flex-col gap-0 min-h-[450px] p-2 relative">
+              {/* Top Row - Passenger Flow */}
+              <div className="grid grid-cols-4 gap-0 h-[200px]">
+                {/* Lane Line */}
+                <div className="bg-gray-100 p-2 h-full border-l border-t border-r border-gray-300">
+                  <h3 className="font-semibold text-sm mb-2">Lane line</h3>
                   <div className="flex justify-between text-xs mb-1">
-                    <span>{lane.passenger_queue.length} / {lane.passenger_queue.capacity}</span>
-                    <span>{Math.round((lane.passenger_queue.length / lane.passenger_queue.capacity) * 100)}%</span>
+                    <span>{lane.lane_line.length} / {lane.lane_line.capacity}</span>
                   </div>
-                  
-                  {/* Queue Capacity Progress Bar */}
-                  <div className="w-full bg-gray-200 rounded-full h-1.5 mb-2">
-                    <div 
-                      className={`h-1.5 rounded-full ${
-                        (lane.passenger_queue.length / lane.passenger_queue.capacity) * 100 < 50 ? 'bg-green-500' : 
-                        (lane.passenger_queue.length / lane.passenger_queue.capacity) * 100 < 70 ? 'bg-yellow-500' : 
-                        (lane.passenger_queue.length / lane.passenger_queue.capacity) * 100 < 90 ? 'bg-orange-500' : 
-                        'bg-red-500'
-                      }`}
-                      style={{ width: `${Math.min((lane.passenger_queue.length / lane.passenger_queue.capacity) * 100, 100)}%` }}
-                    ></div>
-                  </div>
-                  
-                  <div className="overflow-y-auto h-[calc(100%-2rem)]">
-                    {lane.passenger_queue.length > 0 ? (
-                      <div className="bg-gray-100 p-1 rounded">
-                        {lane.passenger_queue.getAll().map((passenger, idx) => (
-                          <div key={`${passenger.id}-${idx}`} className="text-xs mb-1 border-b border-gray-100 last:border-0">
+                  <div className="overflow-y-auto h-[120px]">
+                    {lane.lane_line.length > 0 ? (
+                      <div className="space-y-1">
+                        {lane.lane_line.getAll().map((passenger, idx) => (
+                          <div key={`${passenger.id}-${idx}`} className="bg-white rounded text-[11px]">
                             <PassengerLabel 
                               passenger={passenger} 
                               onClick={onSelectPassenger}
-                              showDetails={false}
                             />
                           </div>
                         ))}
@@ -96,189 +85,171 @@ export const SecurityLanesColumn = ({
                     )}
                   </div>
                 </div>
-              </div>
-              
-              {/* Column 2: Scanner Queues */}
-              <div className="col-span-1 flex flex-col space-y-3">
-                {/* Bag Scanner Queue */}
-                <div className="border border-gray-200 rounded p-2 flex-1">
-                  <h3 className="font-semibold text-sm mb-2">Bag scanner queue</h3>
-                  <div className="bg-gray-50 p-2 rounded h-[calc(100%-2rem)]">
-                    <div className="text-xs mb-1">{lane.bag_scanner_queue.length} / {lane.bag_scanner.capacity}</div>
-                    
-                    <div className="overflow-y-auto h-[calc(100%-1.5rem)]">
-                      {lane.bag_scanner_queue.length > 0 ? (
-                        <div className="bg-gray-100 p-1 rounded">
-                          {lane.bag_scanner_queue.map((passenger, idx) => {
-                            const isUnloading = passenger.unloading_bag;
-                            const isWaiting = idx >= lane.bag_unloading_bays;
-                            return (
-                              <div key={`${passenger.id}-${idx}`} className="text-xs mb-1 border-b border-gray-100 last:border-b-0">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-1">
-                                    <PassengerLabel 
-                                      passenger={passenger} 
-                                      onClick={onSelectPassenger}
-                                      showDetails={false}
-                                    />
-                                    {!isUnloading && isWaiting && (
-                                      <span className="text-gray-400 text-[10px] italic">waiting</span>
-                                    )}
-                                  </div>
-                                  {passenger.unloading_bag && (
-                                    <div className="flex items-center ml-2">
-                                      <div className="w-10 bg-gray-200 rounded-full h-1.5 mr-1">
-                                        <div 
-                                          className="bg-blue-500 h-1.5 rounded-full" 
-                                          style={{width: `${Math.floor(passenger.unloading_progress || 0)}%`}}
-                                        ></div>
-                                      </div>
-                                      <span className="text-xs">{Math.floor(passenger.unloading_progress || 0)}%</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <div className="text-gray-400 text-xs italic">Queue empty</div>
-                      )}
-                    </div>
+
+                {/* Body Scanner Line */}
+                <div className="bg-gray-100 p-2 h-full border-t border-gray-300">
+                  <h3 className="font-semibold text-sm mb-2">Body scanner line</h3>
+                  <div className="text-xs mb-1">{lane.body_scan_line.length} / {lane.body_scan_line.capacity}</div>
+                  <div className="overflow-y-auto h-[120px]">
+                    {lane.body_scan_line.length > 0 ? (
+                      <div className="space-y-1">
+                        {lane.body_scan_line.getAll().map((passenger) => (
+                            <PassengerLabel 
+                              key={passenger.id}
+                              passenger={passenger} 
+                              onClick={onSelectPassenger}
+                            />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-gray-400 text-xs italic">Queue empty</div>
+                    )}
                   </div>
                 </div>
-                
-                {/* Body Scanner Queue */}
-                <div className="border border-gray-200 rounded p-2 flex-1">
-                  <h3 className="font-semibold text-sm mb-2">Body scanner queue</h3>
-                  <div className="bg-gray-50 p-2 rounded h-[calc(100%-2rem)]">
-                    <div className="text-xs mb-1">{lane.passengers_in_body_scanner_queue.length} / {lane.person_scanner.capacity}</div>
-                    
-                    <div className="overflow-y-auto h-[calc(100%-1.5rem)]">
-                      {lane.passengers_in_body_scanner_queue.length > 0 ? (
-                        <div className="bg-gray-100 p-1 rounded">
-                          {lane.passengers_in_body_scanner_queue.map((passenger, idx) => (
-                            <div key={`${passenger.id}-${idx}`} className="text-xs mb-1 border-b border-gray-100 last:border-b-0">
-                              <PassengerLabel 
-                                passenger={passenger} 
-                                onClick={onSelectPassenger}
-                                showDetails={false}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-gray-400 text-xs italic">Queue empty</div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Column 3: Scanners */}
-              <div className="col-span-1 flex flex-col space-y-3">
-                {/* Bag Scanner */}
-                <div className="border border-gray-200 rounded p-2 flex-1">
-                  <h3 className="font-semibold text-sm mb-2">Bag scanner</h3>
-                  <div className="bg-gray-50 p-2 rounded h-[calc(100%-2rem)]">
-                    <div className="text-xs font-semibold mb-1">Scanner: {lane.bag_scanner.current_items.length}/{lane.bag_scanner.capacity}</div>
-                    
-                    <div className="overflow-y-auto h-[calc(100%-1.5rem)]">
-                      {lane.bag_scanner.current_items.length > 0 ? (
-                        <div className="bg-gray-100 p-1 rounded">
-                          {lane.bag_scanner.current_items.map(bagId => {
-                            const bag = gameState.bags.find(b => b.id === bagId);
-                            return bag ? (
-                              <div key={bagId} className="text-xs flex justify-between items-center mb-1 p-1 border-b border-gray-100 last:border-b-0">
-                                <span className="truncate w-16">{bag.passenger_name.split(' ')[0]}</span>
-                                <div className="w-12 bg-gray-200 rounded-full h-2">
-                                  <div 
-                                    className="bg-green-500 h-2 rounded-full" 
-                                    style={{width: `${Math.floor(lane.bag_scanner.current_scan_progress[bagId] || 0)}%`}}
-                                  ></div>
-                                </div>
-                                <span className="w-6 text-right">{Math.floor(lane.bag_scanner.current_scan_progress[bagId] || 0)}%</span>
-                              </div>
-                            ) : null;
-                          })}
-                        </div>
-                      ) : (
-                        <div className="text-gray-400 text-xs italic">No bags in scanner</div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                
+
                 {/* Body Scanner */}
-                <div className="border border-gray-200 rounded p-2 flex-1">
+                <div className="bg-gray-100 p-2 h-full border-t border-gray-300">
                   <h3 className="font-semibold text-sm mb-2">Body scanner</h3>
-                  <div className="bg-gray-50 p-2 rounded h-[calc(100%-2rem)]">
-                    <div className="text-xs font-semibold mb-1">Scanner: {lane.person_scanner.current_items.length}/{lane.person_scanner.capacity}</div>
-                    
-                    <div className="overflow-y-auto h-[calc(100%-1.5rem)]">
-                      {lane.person_scanner.current_items.length > 0 ? (
-                        <div className="bg-gray-100 p-1 rounded">
-                          {lane.person_scanner.current_items.map(personId => {
-                            const passenger = gameState.passengers.find(p => p.id === personId);
-                            return passenger ? (
-                              <div key={personId} className="text-xs flex justify-between items-center mb-1 p-1 border-b border-gray-100 last:border-b-0">
-                                <span className="truncate w-16">{passenger.name.split(' ')[0]}</span>
-                                <div className="w-12 bg-gray-200 rounded-full h-2">
-                                  <div 
-                                    className="bg-green-500 h-2 rounded-full" 
-                                    style={{width: `${Math.floor(lane.person_scanner.current_scan_progress[personId] || 0)}%`}}
-                                  ></div>
-                                </div>
-                                <span className="w-6 text-right">{Math.floor(lane.person_scanner.current_scan_progress[personId] || 0)}%</span>
-                              </div>
-                            ) : null;
-                          })}
-                        </div>
-                      ) : (
-                        <div className="text-gray-400 text-xs italic">No people in scanner</div>
-                      )}
-                    </div>
+                  <div className="text-xs mb-1">{lane.body_scanner.current_items.length} / {lane.body_scanner.capacity}</div>
+                  <div className="overflow-y-auto h-[120px]">
+                    {lane.body_scanner.current_items.length > 0 ? (
+                      <div className="space-y-1">
+                        {lane.body_scanner.current_items.getAll().map(passenger => (
+                            <PassengerLabel 
+                              key={passenger.id}
+                              passenger={passenger} 
+                              onClick={onSelectPassenger}
+                              showProgress
+                              progress={lane.body_scanner.current_scan_progress[passenger.id]}
+                            />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-gray-400 text-xs italic">No passengers in scanner</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Bag Pickup */}
+                <div className="bg-gray-100 p-2 h-full border-t border-gray-300">
+                  <h3 className="font-semibold text-sm mb-2">Bag pickup</h3>
+                  <div className="text-xs mb-1">{lane.bag_pickup_area.length} / {lane.bag_pickup_area.capacity}</div>
+                  <div className="overflow-y-auto h-[120px]">
+                    {lane.bag_pickup_area.length > 0 ? (
+                      <div className="space-y-1">
+                        {lane.bag_pickup_area.getAll().map((passenger) => (
+                            <PassengerLabel
+                              key={passenger.id}
+                              passenger={passenger} 
+                              onClick={onSelectPassenger}
+                            />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-gray-400 text-xs italic">No passengers waiting</div>
+                    )}
                   </div>
                 </div>
               </div>
-              
-              {/* Column 4: Placeholder and Waiting for Bags */}
-              <div className="col-span-1 flex flex-col space-y-3">
-                {/* Placeholder */}
-                <div className="border border-gray-200 rounded p-2 flex-1">
-                  <h3 className="font-semibold text-sm mb-2">PLACEHOLDER</h3>
-                  <div className="bg-gray-50 p-2 rounded h-[calc(100%-2rem)]">
-                    <div className="text-gray-400 text-xs italic">Future functionality</div>
+
+              {/* Bottom Row - Bag Flow */}
+              <div className="grid grid-cols-4 gap-0 h-[200px]">
+                {/* Bag Drop Line */}
+                <div className="bg-gray-100 p-2 h-full border-l border-b border-gray-300">
+                  <h3 className="font-semibold text-sm mb-2">Bag drop line</h3>
+                  <div className="text-xs mb-1">{lane.bag_drop_line.length} / {lane.bag_drop_line.capacity}</div>
+                  <div className="overflow-y-auto h-[120px]">
+                    {lane.bag_drop_line.length > 0 ? (
+                      <div className="space-y-1">
+                        {lane.bag_drop_line.getAll().map((passenger) => (
+                            <PassengerLabel 
+                              key={passenger.id}
+                              passenger={passenger} 
+                              onClick={onSelectPassenger}
+                            />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-gray-400 text-xs italic">Queue empty</div>
+                    )}
                   </div>
                 </div>
-                
-                {/* Waiting for Bags */}
-                <div className="border border-gray-200 rounded p-2 flex-1">
-                  <h3 className="font-semibold text-sm mb-2">Waiting for bags</h3>
-                  <div className="bg-gray-50 p-2 rounded h-[calc(100%-2rem)]">
-                    <div className="overflow-y-auto h-full">
-                      {lane.passengers_waiting_for_bags.length > 0 ? (
-                        <div>
-                          {lane.passengers_waiting_for_bags.map((passenger, idx) => (
-                            <div key={`${passenger.id}-waiting-${idx}`} className="text-xs py-1 border-b border-gray-100 last:border-0">
-                              <PassengerLabel 
-                                passenger={passenger} 
-                                onClick={onSelectPassenger}
-                                showDetails={false}
+
+                {/* Bag Drop */}
+                <div className="bg-gray-100 p-2 h-full border-b border-gray-300">
+                  <h3 className="font-semibold text-sm mb-2">Bag drop</h3>
+                  <div className="text-xs mb-1">{lane.bag_drop_unload.length} / {lane.bag_unloading_bays}</div>
+                  <div className="overflow-y-auto h-[120px]">
+                    {lane.bag_drop_unload.length > 0 ? (
+                      <div className="space-y-1">
+                        {lane.bag_drop_unload.getAll().map((passenger) => (
+                            <PassengerLabel 
+                              key={passenger.id}
+                              passenger={passenger} 
+                              onClick={onSelectPassenger}
+                              showProgress={passenger.unloading_bag}
+                              progress={passenger.unloading_progress}
                               />
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-gray-400 text-xs italic">No passengers waiting</div>
-                      )}
-                    </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-gray-400 text-xs italic">No passengers unloading</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Bag Scanner */}
+                <div className="bg-blue-50 p-2 h-full border-l border-t border-b border-gray-300">
+                  <h3 className="font-semibold text-sm mb-2">Bag scanner</h3>
+                  <div className="text-xs mb-1">{lane.bag_scanner.current_items.length} / {lane.bag_scanner.capacity}</div>
+                  <div className="overflow-y-auto h-[120px]">
+                    {lane.bag_scanner.current_items.length > 0 ? (
+                      <div className="space-y-1">
+                        {lane.bag_scanner.current_items.getAll().map(bag => {
+                          const passenger = gameState.passengers.find(p => p.bag?.id === bag.id);
+                          return passenger?.bag ? (
+                            <BagLabel
+                              key={bag.id}
+                              bag={bag}
+                              showProgress={bag.is_being_scanned}
+                              progress={lane.bag_scanner.current_scan_progress[bag.id]}
+                            />
+                          ) : null;
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-gray-400 text-xs italic">No bags in scanner</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Bag Off Ramp */}
+                <div className="bg-blue-50 p-2 h-full border-r border-b border-gray-300">
+                  <h3 className="font-semibold text-sm mb-2">Bag off ramp</h3>
+                  <div className="text-xs mb-1">{lane.bag_scanner_off_ramp.length} / {lane.bag_scanner_off_ramp.capacity}</div>
+                  <div className="overflow-y-auto h-[120px]">
+                    {lane.bag_scanner_off_ramp.length > 0 ? (
+                      <div className="space-y-1">
+                        {lane.bag_scanner_off_ramp.getAll().map(bag => {
+                          const passenger = gameState.passengers.find(p => p.bag?.id === bag.id);
+                          return passenger?.bag ? (
+                            <BagLabel 
+                              key={bag.id}
+                              bag={bag}
+                            />
+                          ) : null;
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-gray-400 text-xs italic">No bags waiting</div>
+                    )}
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   );

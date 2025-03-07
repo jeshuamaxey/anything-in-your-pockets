@@ -1,5 +1,11 @@
 import { SecurityLane } from "@/types/gameTypes";
 
+export const generatePassengerId = (currentTime?: number): string => {
+  const timestamp = currentTime || Date.now();
+  const randomId = Math.floor(Math.random() * 1000000000);
+  return `passenger_${timestamp}_${randomId}`;
+};
+
 // Format time as MM:SS
 export const formatTime = (seconds: number): string => {
   const minutes = Math.floor(seconds / 60);
@@ -9,12 +15,24 @@ export const formatTime = (seconds: number): string => {
 
 export const countPassengersInLane = (lane: SecurityLane): number => {
   return (
-    lane.passenger_queue.length +
-    lane.bag_scanner_queue.length +
-    lane.passengers_in_body_scanner_queue.length +
-    lane.passengers_waiting_for_bags.length
+    lane.lane_line.length +
+    lane.bag_drop_line.length +
+    lane.bag_drop_unload.length +
+    lane.body_scan_line.length +
+    lane.bag_pickup_area.length +
+    lane.body_scanner.current_items.length +
+    lane.passengers_unloading_bags.length
   );
 };
+
+// export const countLaneCapacity = (lane: SecurityLane): number => {
+//   return (
+//     lane.passenger_queue.capacity +
+//     lane.bag_scanner_queue.capacity +
+//     lane.passengers_in_body_scanner_queue.capacity +
+//     lane.passengers_waiting_for_bags.capacity
+//   );
+// };
 
 // Calculate duration between two timestamps
 export const calculateDuration = (start?: number, end?: number) => {

@@ -3,10 +3,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { 
   GameState, 
-  Bag,
   Passenger,
 } from '@/types/gameTypes';
-import { GAME_TICK_MS, HISTOGRAM_INTERVAL, UNLOADING_ASSISTANCE_THRESHOLD } from '@/lib/game-constants';
+import {
+  GAME_TICK_MS,
+  HISTOGRAM_INTERVAL,
+  INITIAL_PASSENGERS,
+  // UNLOADING_ASSISTANCE_THRESHOLD
+} from '@/lib/game-constants';
 import TopControlBar from './game/layout/TopControlBar';
 import useGameState from '@/hooks/useGameState';
 import { generateRandomBag } from '@/lib/game-generators';
@@ -15,38 +19,83 @@ import SecurityQueue from './game/layout/SecurityQueue';
 import { SecurityLanesColumn } from './game/layout/SecurityLanesColumn';
 import SystemStatusColumn from './game/layout/SystemStatusColumn';
 import { normalDistribution } from '@/lib/game-utils';
-
+import { generatePassengerId } from '@/lib/game-utils';
+import { assignPassengerToLane } from '@/lib/game-logic';
 const Game = () => {
   const [gameState, setGameState] = useGameState()
   const gameLoopRef = useRef<NodeJS.Timeout | null>(null);
   const [selectedPassenger, setSelectedPassenger] = useState<Passenger | null>(null);
   
+  // Add keyboard event listener
+  useEffect(() => {
+    const handleKeyPress = (event: KeyboardEvent) => {
+      /**
+       * TOGGLE PLAY/PAUSE
+       */
+      // Handle play/pause with 'p' key
+      if (event.key.toLowerCase() === 'p') {
+        toggleGame();
+        return;
+      }
+
+      /**
+       * ASSIGN PASSENGERS TO LANES
+       */
+      // Check if the pressed key is a number between 1-9
+      const laneNumber = parseInt(event.key);
+      if (!isNaN(laneNumber) && laneNumber >= 1 && laneNumber <= 9) {
+        // Get the lane index (0-based)
+        const laneIndex = laneNumber - 1;
+        
+        // Check if the lane exists
+        if (laneIndex < gameState.security_lanes.length) {
+          // Get the first passenger from the main queue
+          const nextPassenger = gameState.main_queue.peek();
+          if (nextPassenger) {
+            assignPassengerToLane(gameState, setGameState, nextPassenger.id, gameState.security_lanes[laneIndex].id);
+          }
+        }
+      }
+    };
+
+    // Add event listener
+    window.addEventListener('keydown', handleKeyPress);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('keydown', handleKeyPress);
+    };
+  }, [gameState, setGameState]);
+
   // Ensure the game is properly initialized
   useEffect(() => {
     // Make sure the game is paused on initial load
-    if (!gameState.paused) {
-      setGameState(prevState => ({
-        ...prevState,
-        paused: true
-      }));
-    }
-  }, []);
+    setGameState(prevState => ({
+      ...prevState,
+      paused: true
+    }));
+  }, []); // Empty dependency array - only run once on mount
 
   // Helper function to create and add a passenger to the game state
   const createAndAddPassenger = () => {
     const timestamp = Date.now();
-    const randomId = Math.floor(Math.random() * 1000000);
-    const passengerId = `passenger_${timestamp}_${randomId}`;
-    console.log(`Creating passenger with ID: ${passengerId}`);
+    const passengerId = generatePassengerId(timestamp)
     const newPassenger = generateRandomPassenger(passengerId);
     
     // Set the spawned timestamp
     newPassenger.spawned_timestamp = timestamp;
     
     // Create a bag for the passenger if they have one
-    let newBag: Bag | null = null;
     if (newPassenger.has_bag) {
-      newBag = generateRandomBag(passengerId, newPassenger.name);
+      console.log(`Creating bag for passenger ${passengerId}:`, {
+        has_bag: newPassenger.has_bag,
+        passenger_name: newPassenger.name
+      });
+      newPassenger.bag = generateRandomBag(passengerId, newPassenger.name);
+      newPassenger.bag_on_person = true; // Initially the bag is with the passenger
+    } else {
+      newPassenger.bag = null;
+      newPassenger.bag_on_person = false;
     }
     
     setGameState(prevState => {
@@ -63,440 +112,12 @@ const Game = () => {
       newState.passengers = [...newState.passengers, newPassenger];
       
       // Add passenger to the main queue
-      console.log(`Enqueueing passenger ${passengerId} to main queue`);
-      newState.main_queue.enqueue(newPassenger);
-      
-      // Add bag to the bags list if the passenger has one
-      if (newBag) {
-        newState.bags = [...newState.bags, newBag];
+      if (!newState.main_queue.findById(passengerId)) {
+        newState.main_queue.enqueue(newPassenger);
       }
       
       // Update last spawn time
       newState.last_spawn_time = timestamp;
-      
-      return newState;
-    });
-  };
-  
-  // Process security lanes
-  const processSecurityLanes = () => {
-    setGameState(prevState => {
-      const newState = { ...prevState };
-      
-      // Process each security lane
-      newState.security_lanes = newState.security_lanes.map(lane => {
-        const updatedLane = { ...lane };
-        
-        // 1. Process main queue - move passengers to either bag scanner queue or body scanner queue
-        if (updatedLane.passenger_queue.length > 0 && updatedLane.current_processing_count < updatedLane.processing_capacity) {
-          // Get the next passenger from the queue
-          const passenger = updatedLane.passenger_queue.peek();
-          
-          if (passenger) {
-            // Dequeue the passenger from the main queue
-            updatedLane.passenger_queue.dequeue();
-            updatedLane.current_processing_count++;
-            
-            // If passenger has a bag, add to bag scanner queue
-            if (passenger.has_bag) {
-              // Verify the passenger has a bag in the bags array
-              const hasBag = newState.bags.some(bag => bag.passenger_id === passenger.id);
-              
-              if (hasBag) {
-                updatedLane.bag_scanner_queue.push(passenger);
-              } else {
-                // If no bag found, treat as if they don't have a bag
-                console.warn(`Passenger ${passenger.id} has has_bag=true but no bag found in bags array`);
-                passenger.has_bag = false;
-                updatedLane.passengers_in_body_scanner_queue.push(passenger);
-              }
-            } else {
-              // If passenger doesn't have a bag, add directly to body scanner queue
-              updatedLane.passengers_in_body_scanner_queue.push(passenger);
-            }
-          }
-        }
-        
-        // 2. Process bag unloading for passengers in the bag scanner queue
-        const baggagePassengers = updatedLane.bag_scanner_queue;
-        
-        // Check the first N passengers in the bag scanner queue (where N is bag_unloading_bays)
-        // and allow them to start unloading their bags
-        for (let i = 0; i < Math.min(updatedLane.bag_unloading_bays, baggagePassengers.length); i++) {
-          const passenger = baggagePassengers[i];
-          
-          // Skip passengers who don't have bags
-          if (!passenger.has_bag) {
-            // This shouldn't happen, but if it does, move them to body scanner queue
-            console.warn(`Passenger ${passenger.id} in bag scanner queue but has_bag=false`);
-            updatedLane.bag_scanner_queue = updatedLane.bag_scanner_queue.filter(p => p.id !== passenger.id);
-            updatedLane.passengers_in_body_scanner_queue.push(passenger);
-            continue;
-          }
-          
-          // Find the passenger's bag
-          const passengerBag = newState.bags.find(bag => bag.passenger_id === passenger.id);
-          
-          // If bag not found or already unloaded, move passenger to body scanner queue
-          if (!passengerBag) {
-            console.warn(`Passenger ${passenger.id} has_bag=true but no bag found`);
-            updatedLane.bag_scanner_queue = updatedLane.bag_scanner_queue.filter(p => p.id !== passenger.id);
-            updatedLane.passengers_in_body_scanner_queue.push(passenger);
-            continue;
-          }
-          
-          if (passengerBag.is_unloaded) {
-            // Bag already unloaded, move passenger to body scanner queue
-            updatedLane.bag_scanner_queue = updatedLane.bag_scanner_queue.filter(p => p.id !== passenger.id);
-            updatedLane.passengers_in_body_scanner_queue.push(passenger);
-            continue;
-          }
-          
-          // If passenger isn't already unloading, start the unloading process
-          if (!passenger.unloading_bag) {
-            passenger.unloading_bag = true;
-            passenger.unloading_progress = 0;
-            passenger.unloading_start_time = newState.time;
-            passenger.bag_unload_started_timestamp = Date.now();
-            
-            // Add to the unloading passengers list if not already there
-            if (!updatedLane.passengers_unloading_bags.some(p => p.id === passenger.id)) {
-              updatedLane.passengers_unloading_bags.push(passenger);
-            }
-          }
-          
-          // Update unloading progress based on passenger's security_familiarity
-          // More experienced passengers (higher familiarity) unload faster
-          const unloadingSpeed = 7 + (passenger.security_familiarity * 2.5); // 7-32% per second (increased from 5-25%)
-          passenger.unloading_progress = (passenger.unloading_progress || 0) + (unloadingSpeed / 10) * (GAME_TICK_MS / 1000);
-          
-          // Check if unloading is complete
-          if (passenger.unloading_progress >= 100) {
-            // Mark bag as unloaded
-            const bagIndex = newState.bags.findIndex(bag => bag.passenger_id === passenger.id);
-            if (bagIndex !== -1) {
-              newState.bags[bagIndex].is_unloaded = true;
-              
-              // Add bag to scanner waiting queue
-              if (!updatedLane.bag_scanner.waiting_items.includes(newState.bags[bagIndex].id)) {
-                updatedLane.bag_scanner.waiting_items.push(newState.bags[bagIndex].id);
-              }
-            }
-            
-            // Record bag unload completion timestamp
-            passenger.bag_unload_completed_timestamp = Date.now();
-            
-            // Reset unloading state
-            passenger.unloading_bag = false;
-            passenger.unloading_progress = 0;
-            
-            // Remove from unloading passengers list
-            updatedLane.passengers_unloading_bags = updatedLane.passengers_unloading_bags.filter(
-              p => p.id !== passenger.id
-            );
-            
-            // Remove from bag scanner queue
-            updatedLane.bag_scanner_queue = updatedLane.bag_scanner_queue.filter(
-              p => p.id !== passenger.id
-            );
-            
-            // Add to body scanner queue and record timestamp
-            passenger.body_scanner_queue_joined_timestamp = Date.now();
-            updatedLane.passengers_in_body_scanner_queue.push(passenger);
-          }
-        }
-        
-        // 2.5 Anti-deadlock: Security agent assistance for passengers struggling with unloading
-        updatedLane.passengers_unloading_bags.forEach(passenger => {
-          if (passenger.unloading_start_time && 
-              newState.time - passenger.unloading_start_time > UNLOADING_ASSISTANCE_THRESHOLD) {
-            
-            // Find an available security agent to help
-            const availableAgent = updatedLane.security_agents.find(agent => agent.is_available);
-            
-            if (availableAgent && Math.random() < 0.2) { // 20% chance per tick for agent to help
-              console.log(`Security agent ${availableAgent.name} is assisting passenger ${passenger.name} with unloading`);
-              
-              // Agent helps speed up unloading significantly
-              passenger.unloading_progress = Math.min(100, (passenger.unloading_progress || 0) + 30);
-              
-              // If unloading is now complete
-              if (passenger.unloading_progress >= 100) {
-                // Mark bag as unloaded
-                const bagIndex = newState.bags.findIndex(bag => bag.passenger_id === passenger.id);
-                if (bagIndex !== -1) {
-                  newState.bags[bagIndex].is_unloaded = true;
-                  
-                  // Add bag to scanner waiting queue
-                  if (!updatedLane.bag_scanner.waiting_items.includes(newState.bags[bagIndex].id)) {
-                    updatedLane.bag_scanner.waiting_items.push(newState.bags[bagIndex].id);
-                  }
-                }
-                
-                // Reset unloading state
-                passenger.unloading_bag = false;
-                passenger.unloading_progress = 0;
-                
-                // Remove from unloading passengers list
-                updatedLane.passengers_unloading_bags = updatedLane.passengers_unloading_bags.filter(
-                  p => p.id !== passenger.id
-                );
-                
-                // Remove from bag scanner queue
-                updatedLane.bag_scanner_queue = updatedLane.bag_scanner_queue.filter(
-                  p => p.id !== passenger.id
-                );
-                
-                // Add to body scanner queue
-                updatedLane.passengers_in_body_scanner_queue.push(passenger);
-                
-                // Update histogram data
-                newState.histogram_data = incrementHistogramData(newState, newState.time);
-              }
-            }
-          }
-        });
-        
-        // Clean up unloading passengers list (remove any that are no longer unloading)
-        updatedLane.passengers_unloading_bags = updatedLane.passengers_unloading_bags.filter(
-          p => p.unloading_bag
-        );
-        
-        // 3. Process body scanner
-        if (updatedLane.person_scanner.is_operational) {
-          // Process passengers in the body scanner
-          for (let i = 0; i < updatedLane.passengers_in_body_scanner_queue.length; i++) {
-            const passenger = updatedLane.passengers_in_body_scanner_queue[i];
-            
-            // Check if passenger is already being scanned
-            if (!updatedLane.person_scanner.current_items.includes(passenger.id)) {
-              // Add passenger to scanner if there's capacity
-              if (updatedLane.person_scanner.current_items.length < updatedLane.person_scanner.capacity) {
-                updatedLane.person_scanner.current_items.push(passenger.id);
-                updatedLane.person_scanner.current_scan_progress[passenger.id] = 0;
-                
-                // Record body scanner start timestamp
-                passenger.body_scanner_started_timestamp = Date.now();
-                
-                // Calculate scan time using normal distribution (mean: 3s, stdDev: 1s)
-                // Store the total scan time needed for this passenger in seconds
-                const scanTimeSeconds = Math.max(0.5, normalDistribution(3, 1)); // Minimum 0.5 seconds
-                updatedLane.person_scanner.current_scan_time_needed = updatedLane.person_scanner.current_scan_time_needed || {};
-                updatedLane.person_scanner.current_scan_time_needed[passenger.id] = scanTimeSeconds;
-              }
-            } else {
-              // Update scan progress based on the predetermined scan time for this passenger
-              const scanTimeNeeded = updatedLane.person_scanner.current_scan_time_needed?.[passenger.id] || 3; // Default to 3s if not set
-              const progressIncrement = (GAME_TICK_MS / 1000) * (100 / scanTimeNeeded);
-              
-              updatedLane.person_scanner.current_scan_progress[passenger.id] += progressIncrement;
-              
-              // Check if scan is complete
-              if (updatedLane.person_scanner.current_scan_progress[passenger.id] >= 100) {
-                // Record body scanner finish timestamp
-                passenger.body_scanner_finished_timestamp = Date.now();
-                
-                // Remove passenger from scanner
-                updatedLane.person_scanner.current_items = updatedLane.person_scanner.current_items.filter(id => id !== passenger.id);
-                delete updatedLane.person_scanner.current_scan_progress[passenger.id];
-                
-                // Move passenger to waiting for bags
-                passenger.waiting_for_bag_started_timestamp = Date.now();
-                updatedLane.passengers_waiting_for_bags.push(passenger);
-                
-                // Remove passenger from body scanner queue
-                updatedLane.passengers_in_body_scanner_queue = updatedLane.passengers_in_body_scanner_queue.filter(p => p.id !== passenger.id);
-              }
-            }
-          }
-        }
-        
-        // 4. Process bag scanner
-        if (updatedLane.bag_scanner.is_operational) {
-          // Move bags from waiting queue to scanner if there's capacity
-          while (updatedLane.bag_scanner.current_items.length < updatedLane.bag_scanner.capacity && 
-                 updatedLane.bag_scanner.waiting_items.length > 0) {
-            const nextBagId = updatedLane.bag_scanner.waiting_items[0];
-            const bagIndex = newState.bags.findIndex(b => b.id === nextBagId);
-            
-            if (bagIndex !== -1 && !newState.bags[bagIndex].is_being_scanned && !newState.bags[bagIndex].scan_complete) {
-              // Remove from waiting queue
-              updatedLane.bag_scanner.waiting_items.shift();
-              
-              // Add to scanner
-              updatedLane.bag_scanner.current_items.push(nextBagId);
-              updatedLane.bag_scanner.current_scan_progress[nextBagId] = 0;
-              
-              // Mark bag as being scanned
-              newState.bags[bagIndex].is_being_scanned = true;
-              
-              // Find the passenger in the game state and record bag scanner started timestamp
-              const passengerId = newState.bags[bagIndex].passenger_id;
-              const passengerIndex = newState.passengers.findIndex(p => p.id === passengerId);
-              if (passengerIndex !== -1) {
-                // Only set the timestamp if it hasn't been set yet (for the first bag)
-                if (!newState.passengers[passengerIndex].bag_scanner_started_timestamp) {
-                  newState.passengers[passengerIndex].bag_scanner_started_timestamp = Date.now();
-                }
-              }
-            } else {
-              // If bag is already being scanned or complete, just remove it from waiting queue
-              updatedLane.bag_scanner.waiting_items.shift();
-            }
-          }
-          
-          // Process bags in scanner
-          for (const bagId of [...updatedLane.bag_scanner.current_items]) {
-            // Update scan progress
-            updatedLane.bag_scanner.current_scan_progress[bagId] += 
-              (updatedLane.bag_scanner.items_per_minute / 60) * (GAME_TICK_MS / 1000) * 100;
-            
-            // Check if scan is complete
-            if (updatedLane.bag_scanner.current_scan_progress[bagId] >= 100) {
-              // Remove bag from scanner
-              updatedLane.bag_scanner.current_items = updatedLane.bag_scanner.current_items.filter(id => id !== bagId);
-              delete updatedLane.bag_scanner.current_scan_progress[bagId];
-              
-              // Update bag status
-              const bagIndex = newState.bags.findIndex(b => b.id === bagId);
-              if (bagIndex !== -1) {
-                newState.bags[bagIndex].is_being_scanned = false;
-                newState.bags[bagIndex].scan_complete = true;
-                
-                // Check if bag should be flagged for inspection (20% chance)
-                if (Math.random() < 0.2) {
-                  newState.bags[bagIndex].is_flagged = true;
-                  updatedLane.bag_inspection_queue.enqueue(newState.bags[bagIndex]);
-                }
-                
-                // Check if passenger can now complete security
-                const passengerId = newState.bags[bagIndex].passenger_id;
-                
-                // Find the passenger in the game state
-                const passengerIndex = newState.passengers.findIndex(p => p.id === passengerId);
-                if (passengerIndex !== -1) {
-                  // Record bag scanner complete timestamp
-                  newState.passengers[passengerIndex].bag_scanner_complete_timestamp = Date.now();
-                }
-                
-                const passengerWaitingIndex = updatedLane.passengers_waiting_for_bags.findIndex(p => p.id === passengerId);
-                
-                if (passengerWaitingIndex !== -1) {
-                  const passenger = updatedLane.passengers_waiting_for_bags[passengerWaitingIndex];
-                  
-                  // Check if all bags for this passenger are processed
-                  const passengerBags = newState.bags.filter(b => b.passenger_id === passenger.id);
-                  const allBagsProcessed = passengerBags.every(b => b.scan_complete);
-                  
-                  if (allBagsProcessed) {
-                    // Record waiting for bag finished timestamp
-                    passenger.waiting_for_bag_finished_timestamp = Date.now();
-                    
-                    // Record security cleared timestamp
-                    passenger.security_cleared_timestamp = Date.now();
-                    
-                    // Move passenger to completed
-                    updatedLane.passengers_completed.push(passenger);
-                    newState.completed.push(passenger);
-                    
-                    // Update histogram data for the current interval
-                    newState.histogram_data = incrementHistogramData(newState, newState.time);
-                    
-                    // Remove passenger from waiting for bags
-                    updatedLane.passengers_waiting_for_bags.splice(passengerWaitingIndex, 1);
-                    
-                    // Decrement processing count
-                    updatedLane.current_processing_count = Math.max(0, updatedLane.current_processing_count - 1);
-                  }
-                }
-              }
-            }
-          }
-        }
-        
-        // 5. Handle passengers without bags who are waiting
-        const passengersWithoutBags = updatedLane.passengers_waiting_for_bags.filter(p => !p.has_bag);
-        for (const passenger of passengersWithoutBags) {
-          // Passenger doesn't have a bag, move directly to completed
-          updatedLane.passengers_completed.push(passenger);
-          newState.completed.push(passenger);
-          
-          // Update histogram data for the current interval
-          newState.histogram_data = incrementHistogramData(newState, newState.time);
-          
-          // Remove from waiting for bags
-          updatedLane.passengers_waiting_for_bags = updatedLane.passengers_waiting_for_bags.filter(p => p.id !== passenger.id);
-          
-          // Decrement processing count
-          updatedLane.current_processing_count = Math.max(0, updatedLane.current_processing_count - 1);
-        }
-        
-        // 6. Anti-deadlock mechanism: Supervisor intervention
-        // If the lane is getting congested (many people waiting for bags), a supervisor may help
-        if (updatedLane.passengers_waiting_for_bags.length >= 4) {
-          // Find a supervisor agent
-          const supervisor = updatedLane.security_agents.find(agent => 
-            agent.rank === 'supervisor' || agent.rank === 'snr');
-          
-          if (supervisor && Math.random() < 0.1) { // 10% chance per tick when congested
-            // Supervisor helps one random passenger who's been waiting the longest
-            const oldestWaitingPassenger = [...updatedLane.passengers_waiting_for_bags]
-              .sort((a, b) => (a.waiting_since || 0) - (b.waiting_since || 0))
-              [0];
-            
-            if (oldestWaitingPassenger) {
-              console.log(`Supervisor ${supervisor.name} is helping passenger ${oldestWaitingPassenger.name} find their bags`);
-              
-              // Find all bags for this passenger
-              const passengerBags = newState.bags.filter(b => b.passenger_id === oldestWaitingPassenger.id);
-              
-              // Supervisor expedites bag processing
-              passengerBags.forEach(bag => {
-                if (!bag.scan_complete) {
-                  const bagIndex = newState.bags.findIndex(b => b.id === bag.id);
-                  if (bagIndex !== -1) {
-                    // Supervisor finds the bag and completes its processing
-                    newState.bags[bagIndex].is_being_scanned = false;
-                    newState.bags[bagIndex].scan_complete = true;
-                    
-                    // Remove from scanner if it's there
-                    if (updatedLane.bag_scanner.current_items.includes(bag.id)) {
-                      updatedLane.bag_scanner.current_items = updatedLane.bag_scanner.current_items.filter(id => id !== bag.id);
-                      delete updatedLane.bag_scanner.current_scan_progress[bag.id];
-                    }
-                    
-                    // Remove from waiting queue if it's there
-                    const waitingIndex = updatedLane.bag_scanner.waiting_items.indexOf(bag.id);
-                    if (waitingIndex !== -1) {
-                      updatedLane.bag_scanner.waiting_items.splice(waitingIndex, 1);
-                    }
-                  }
-                }
-              });
-              
-              // Move passenger to completed
-              updatedLane.passengers_completed.push(oldestWaitingPassenger);
-              newState.completed.push(oldestWaitingPassenger);
-              
-              // Update histogram data for the current interval
-              newState.histogram_data = incrementHistogramData(newState, newState.time);
-              
-              // Remove passenger from waiting for bags
-              const waitingIndex = updatedLane.passengers_waiting_for_bags.findIndex(
-                p => p.id === oldestWaitingPassenger.id
-              );
-              if (waitingIndex !== -1) {
-                updatedLane.passengers_waiting_for_bags.splice(waitingIndex, 1);
-              }
-              
-              // Decrement processing count
-              updatedLane.current_processing_count = Math.max(0, updatedLane.current_processing_count - 1);
-            }
-          }
-        }
-        
-        return updatedLane;
-      });
       
       return newState;
     });
@@ -515,7 +136,9 @@ const Game = () => {
       }));
     } else {
       if(gameState.time === 0) {
-        for(let i = 0; i < 10; i++) {
+        // Spawn initial passengers
+        const initialPassengers = Math.min(INITIAL_PASSENGERS, gameState.main_queue.capacity);
+        for(let i = 0; i < initialPassengers; i++) {
           createAndAddPassenger();
         }
       }
@@ -527,34 +150,337 @@ const Game = () => {
       
       // Start the game loop
       gameLoopRef.current = setInterval(() => {
-        // Update game time
+        // const loopStartTime = performance.now();
+        // console.log(`Game loop starting at ${loopStartTime}`);
+        
+        // Update game time and process everything in a single state update
         setGameState(prevState => {
+          // const updateStartTime = performance.now();
           const newState = { ...prevState };
+          const currentTime = Date.now();
+          
+          // Update game time
           newState.time = prevState.time + (GAME_TICK_MS / 1000);
           
           // Update histogram data to ensure all intervals exist
           newState.histogram_data = updateHistogramData(prevState);
           
           // Check if it's time to spawn a new passenger
-          const currentTime = Date.now();
           const timeSinceLastSpawn = currentTime - newState.last_spawn_time;
           const spawnInterval = (60 * 1000) / newState.spawn_rate; // Convert spawn rate to milliseconds
           
           // Only spawn a new passenger if enough time has passed since the last spawn
           if (timeSinceLastSpawn >= spawnInterval) {
-            // Update the last spawn time to prevent multiple spawns
-            newState.last_spawn_time = currentTime;
+            const passengerId = generatePassengerId(currentTime)
+            const newPassenger = generateRandomPassenger(passengerId);
+            newPassenger.spawned_timestamp = currentTime;
             
-            // Spawn a new passenger outside of this state update to avoid React state batching issues
-            // Use a small timeout to ensure this happens after the state update
-            setTimeout(() => createAndAddPassenger(), 10);
+            // Create a bag for the passenger if they have one
+            if (newPassenger.has_bag) {
+              newPassenger.bag = generateRandomBag(passengerId, newPassenger.name);
+              newPassenger.bag_on_person = true; // Initially the bag is with the passenger
+            } else {
+              newPassenger.bag = null;
+              newPassenger.bag_on_person = false;
+            }
+            
+            // Add passenger to the passengers list
+            newState.passengers = [...newState.passengers, newPassenger];
+            
+            // Add passenger to the main queue
+            if (!newState.main_queue.findById(passengerId)) {
+              newState.main_queue.enqueue(newPassenger);
+            }
+            
+            // Update the last spawn time
+            newState.last_spawn_time = currentTime;
           }
           
-          // Process security lanes
-          processSecurityLanes();
+          // Process security lanes directly here instead of calling processSecurityLanes()
+          // console.time('processLanes');
+          newState.security_lanes = newState.security_lanes.map(lane => {
+            // const laneStartTime = performance.now();
+            const updatedLane = { ...lane };
+            
+            // 1. Process lane_line - move passengers to either bag_drop_line or body_scan_line
+            if (updatedLane.lane_line.length > 0) {
+              const passenger = updatedLane.lane_line.peek();
+              
+              if (passenger) {
+                if (passenger.has_bag) {
+                  // Move to bag drop line if there's space
+                  if (updatedLane.bag_drop_line.length < updatedLane.bag_drop_line.capacity) {
+                    // Remove from lane line and add to bag drop line
+                    updatedLane.lane_line.dequeue();
+                    updatedLane.bag_drop_line.enqueue(passenger);
+                  }
+                } else {
+                  // No bag, try to move directly to body scanner line
+                  if (updatedLane.body_scan_line.length < updatedLane.body_scan_line.capacity) {
+                    updatedLane.lane_line.dequeue();
+                    updatedLane.body_scan_line.enqueue(passenger);
+                  }
+                }
+              }
+            }
+            
+            // 2. Process bag_drop_line - move passengers to bag_drop_unload when space available
+            if (updatedLane.bag_drop_line.length > 0) {
+              const unloadingCount = updatedLane.bag_drop_unload.length;
+              
+              if (unloadingCount < updatedLane.bag_unloading_bays) {
+                const passenger = updatedLane.bag_drop_line.peek();
+                if (passenger) {
+                  updatedLane.bag_drop_line.dequeue();
+                  updatedLane.bag_drop_unload.enqueue(passenger);
+                }
+              }
+            }
+            
+            // 3. Process bag_drop_unload - handle bag unloading progress
+            const unloadingPassengers = updatedLane.bag_drop_unload.getAll();
+            for (const passenger of unloadingPassengers) {
+              // If passenger isn't already unloading, start the unloading process
+              if (!passenger.unloading_bag) {
+                passenger.unloading_bag = true;
+                passenger.unloading_progress = 0;
+                passenger.unloading_start_time = newState.time;
+                passenger.bag_unload_started_timestamp = Date.now();
+              }
+              
+              // Update unloading progress
+              const unloadingSpeed = 100 +(passenger.security_familiarity); // 7-32% per second
+              passenger.unloading_progress = (passenger.unloading_progress || 0) + (unloadingSpeed / 10) * (GAME_TICK_MS / 1000);
+              
+              // Check if unloading is complete
+              if (passenger.unloading_progress >= 100) {
+                // Mark bag as unloaded and no longer on person
+                if (passenger.bag) {
+                  passenger.bag.is_unloaded = true;
+                  passenger.bag_on_person = false;
+                  
+                  // Add bag to scanner waiting queue
+                  if (!updatedLane.bag_scanner.waiting_items.findById(passenger.bag.id)) {
+                    updatedLane.bag_scanner.waiting_items.enqueue(passenger.bag);
+                  }
+                }
+                
+                // Record completion timestamp
+                passenger.bag_unload_completed_timestamp = Date.now();
+                
+                // Reset unloading state
+                passenger.unloading_bag = false;
+                passenger.unloading_progress = 0;
+                
+                // Move to body scanner line if there's space
+                if (updatedLane.body_scan_line.length < updatedLane.body_scan_line.capacity) {
+                  updatedLane.bag_drop_unload.removeById(passenger.id);
+                  updatedLane.body_scan_line.enqueue(passenger);
+                  passenger.body_scanner_queue_joined_timestamp = Date.now();
+                }
+              }
+            }
+            
+            // 4. Process body scanner line and scanner
+            if (updatedLane.body_scanner.is_operational) {
+              // Initialize scan tracking objects if they don't exist
+              updatedLane.body_scanner.current_scan_progress = updatedLane.body_scanner.current_scan_progress || {};
+              updatedLane.body_scanner.current_scan_time_needed = updatedLane.body_scanner.current_scan_time_needed || {};
+
+              // Try to move passenger from line into scanner
+              if (updatedLane.body_scan_line.length > 0 && 
+                  updatedLane.body_scanner.current_items.length < updatedLane.body_scanner.capacity) {
+                const passenger = updatedLane.body_scan_line.peek();
+
+                if (passenger) {
+                  // Start scanning the passenger
+                  updatedLane.body_scanner.current_items.enqueue(passenger);
+                  updatedLane.body_scanner.current_scan_progress[passenger.id] = 0;
+                  passenger.body_scanner_started_timestamp = Date.now();
+
+                  // Calculate scan time (between 0.5 and ~5 seconds)
+                  const scanTimeSeconds = Math.max(0.5, normalDistribution(3, 1));
+                  updatedLane.body_scanner.current_scan_time_needed[passenger.id] = scanTimeSeconds;
+                  
+                  // Remove from line
+                  updatedLane.body_scan_line.dequeue();
+                }
+              }
+              
+              // Process passengers in scanner
+              const currentItems = updatedLane.body_scanner.current_items.getAll();
+              
+              for (const passenger of currentItems) {
+                // Get scan time needed (default 3 seconds if not set)
+                const scanTimeNeeded = updatedLane.body_scanner.current_scan_time_needed[passenger.id] || 3;
+                
+                // Calculate progress increment (percentage per tick)
+                const progressIncrement = (GAME_TICK_MS / 1000) * (100 / scanTimeNeeded);
+                
+                // Update progress, ensuring it doesn't exceed 100%
+                const currentProgress = updatedLane.body_scanner.current_scan_progress[passenger.id] || 0;
+                const newProgress = Math.min(100, currentProgress + progressIncrement);
+                updatedLane.body_scanner.current_scan_progress[passenger.id] = newProgress;
+
+                // Check if scan is complete
+                if (newProgress >= 100) {
+                  passenger.body_scanner_finished_timestamp = Date.now();
+                  
+                  // Remove from scanner and clean up tracking
+                  updatedLane.body_scanner.current_items.removeById(passenger.id);
+                  delete updatedLane.body_scanner.current_scan_progress[passenger.id];
+                  delete updatedLane.body_scanner.current_scan_time_needed[passenger.id];
+                  
+                  if (passenger.has_bag) {
+                    // Move to bag pickup area
+                    passenger.waiting_for_bag_started_timestamp = Date.now();
+                    updatedLane.bag_pickup_area.enqueue(passenger);
+                  } else {
+                    // No bag, move directly to completed
+                    passenger.security_cleared_timestamp = Date.now();
+                    updatedLane.passengers_completed.push(passenger);
+                    newState.completed.push(passenger);
+                    newState.histogram_data = incrementHistogramData(newState, newState.time);
+                  }
+                }
+              }
+            }
+            
+            // Process bag scanner
+            if (updatedLane.bag_scanner.is_operational) {
+              // Move bags from waiting queue to scanner if there's capacity
+              while (updatedLane.bag_scanner.current_items.length < updatedLane.bag_scanner.capacity && 
+                     updatedLane.bag_scanner.waiting_items.length > 0) {
+                const nextBag = updatedLane.bag_scanner.waiting_items.peek();
+                if (!nextBag) {
+                  console.warn('No bag to add to scanner');
+                  break;
+                }
+                
+                // Find the passenger who owns this bag
+                const passenger = newState.passengers.find(p => p.bag?.id === nextBag.id);
+                if (passenger?.bag && !passenger.bag.is_being_scanned && !passenger.bag.scan_complete) {
+                  // Remove from waiting queue
+                  updatedLane.bag_scanner.waiting_items.dequeue();
+                  
+                  // Add to scanner
+                  updatedLane.bag_scanner.current_items.enqueue(nextBag);
+                  updatedLane.bag_scanner.current_scan_progress[nextBag.id] = 0;
+                  
+                  // Mark bag as being scanned
+                  passenger.bag.is_being_scanned = true;
+                  passenger.bag_scanner_started_timestamp = Date.now();
+                } else {
+                  // If bag is already being scanned or complete, just remove it from waiting queue
+                  updatedLane.bag_scanner.waiting_items.dequeue();
+                }
+              }
+              
+              // Process bags in scanner
+              const bagsInScanner = updatedLane.bag_scanner.current_items.getAll();
+
+              for (const bag of bagsInScanner) {
+                // Update scan progress
+                const currentProgress = updatedLane.bag_scanner.current_scan_progress[bag.id] || 0;
+                const progressIncrement = (updatedLane.bag_scanner.items_per_minute / 60) * (GAME_TICK_MS / 1000) * 100;
+                const newProgress = Math.min(100, currentProgress + progressIncrement);
+                updatedLane.bag_scanner.current_scan_progress[bag.id] = newProgress;
+                
+                // Check if scan is complete
+                if (newProgress >= 100) {
+                  // Find the passenger who owns this bag
+                  const passenger = newState.passengers.find(p => p.bag?.id === bag.id);
+                  if (passenger?.bag) {
+                    // Update bag status and move to off ramp
+                    passenger.bag.is_being_scanned = false;
+                    passenger.bag.scan_complete = true;
+                    passenger.bag_scanner_complete_timestamp = Date.now();
+                    
+                    // Check if bag should be flagged for inspection (20% chance)
+                    // if (Math.random() < 0.2) {
+                    //   passenger.bag.is_flagged = true;
+                    //   console.log(`Bag ${bag.id} flagged for inspection`);
+                    // }
+                    
+                    // Remove from scanner and add to off ramp
+                    updatedLane.bag_scanner.current_items.removeById(bag.id);
+                    delete updatedLane.bag_scanner.current_scan_progress[bag.id];
+                    updatedLane.bag_scanner_off_ramp.enqueue(bag);
+                    
+                    // Check if passenger is waiting in bag pickup area
+                    const waitingPassenger = updatedLane.bag_pickup_area.findById(passenger.id);
+                    if (waitingPassenger) {
+                      console.log(`Passenger ${passenger.id} was waiting for bag ${bag.id}, moving to completed`);
+                      // Bag is scanned, passenger can pick it up
+                      passenger.bag_on_person = true;
+                      passenger.waiting_for_bag_finished_timestamp = Date.now();
+                      passenger.security_cleared_timestamp = Date.now();
+                      
+                      // Move to completed
+                      updatedLane.passengers_completed.push(passenger);
+                      newState.completed.push(passenger);
+                      
+                      // Update histogram
+                      newState.histogram_data = incrementHistogramData(newState, newState.time);
+                      
+                      // Remove from bag pickup area and off ramp
+                      updatedLane.bag_pickup_area.removeById(passenger.id);
+                      updatedLane.bag_scanner_off_ramp.removeById(bag.id);
+                    } else {
+                      console.log(`Bag ${bag.id} scan complete but passenger ${passenger.id} not yet in pickup area`);
+                    }
+                  }
+                }
+              }
+            }
+            
+            // Process bag pickup area - check for completed bags
+            if (updatedLane.bag_pickup_area.length > 0) {
+              const waitingPassengers = updatedLane.bag_pickup_area.getAll();
+              for (const passenger of waitingPassengers) {
+                // Find passenger's bag in off ramp
+                const completedBag = updatedLane.bag_scanner_off_ramp.findById(passenger.bag?.id || '');
+                if (completedBag && passenger.bag?.scan_complete) {
+                  console.log(`Found completed bag ${completedBag.id} for waiting passenger ${passenger.id}`);
+                  // Reunite passenger with bag
+                  passenger.bag_on_person = true;
+                  passenger.waiting_for_bag_finished_timestamp = Date.now();
+                  passenger.security_cleared_timestamp = Date.now();
+                  
+                  // Move to completed
+                  updatedLane.passengers_completed.push(passenger);
+                  newState.completed.push(passenger);
+                  
+                  // Update histogram
+                  newState.histogram_data = incrementHistogramData(newState, newState.time);
+                  
+                  // Remove from bag pickup area and off ramp
+                  updatedLane.bag_pickup_area.removeById(passenger.id);
+                  updatedLane.bag_scanner_off_ramp.removeById(completedBag.id);
+                }
+              }
+            }
+            
+            // const laneEndTime = performance.now();
+            // console.log(`Lane ${lane.name} processed in ${(laneEndTime - laneStartTime).toFixed(2)}ms`);
+            return updatedLane;
+          });
+          // console.timeEnd('processLanes');
+          
+          // const updateEndTime = performance.now();
+          // console.log(`State update took ${(updateEndTime - updateStartTime).toFixed(2)}ms`);
           
           return newState;
         });
+        
+        // const loopEndTime = performance.now();
+        // const totalTime = loopEndTime - loopStartTime;
+        // console.log(`Game loop completed in ${totalTime.toFixed(2)}ms (${(totalTime / GAME_TICK_MS * 100).toFixed(1)}% of tick interval)`);
+        
+        // Warn if we're taking too long
+        // if (totalTime > GAME_TICK_MS * 0.8) {
+        //   console.warn(`Game loop is taking ${totalTime.toFixed(2)}ms, which is ${(totalTime / GAME_TICK_MS * 100).toFixed(1)}% of the tick interval (${GAME_TICK_MS}ms). This may cause lag.`);
+        // }
       }, GAME_TICK_MS);
     }
   };

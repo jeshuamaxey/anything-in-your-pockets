@@ -1,19 +1,19 @@
 import React from 'react';
 import { Passenger } from '@/types/gameTypes';
-import { formatTimestamp } from '@/lib/utils';
+import LabelProgressBar from './LabelProgressBar';
 
 interface PassengerLabelProps {
   passenger: Passenger;
   onClick?: (passenger: Passenger) => void;
-  showDetails?: boolean;
-  showTimestamp?: boolean;
+  showProgress?: boolean;
+  progress?: number;
 }
 
 export const PassengerLabel = ({
   passenger,
   onClick,
-  showDetails = false,
-  showTimestamp = false
+  showProgress = false,
+  progress = 0
 }: PassengerLabelProps) => {
   const handleClick = () => {
     if (onClick) {
@@ -22,24 +22,19 @@ export const PassengerLabel = ({
   };
 
   return (
-    <div 
-      className={`flex flex-col ${onClick ? 'cursor-pointer hover:bg-gray-50' : ''}`}
-      onClick={handleClick}
-      >
-      <div className="flex items-center gap-2">
-        <span className="font-mono">passenger {passenger.id.slice(-3)}</span>
-        {passenger.has_bag ? <span title="Has bags">🧳</span> : <span title="No bags">🏃‍♂️</span>}
-      </div>
-      
-      {showDetails && (
-        <div className="text-xs text-gray-600 mt-1">
-          {showTimestamp && passenger.spawned_timestamp && (
-            <div>
-              Spawned: {formatTimestamp(passenger.spawned_timestamp)}
-            </div>
-          )}
+    <div className="bg-white rounded">
+      <div 
+        className={`w-full text-[11px] flex flex-col px-1 ${onClick ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+        onClick={handleClick}
+        >
+        <div className="flex items-center gap-1 justify-between">
+          <span className="font-mono flex-1">
+            {passenger.emoji} {passenger.id.slice(-3)}
+            {passenger.has_bag ? <span title="Has bags"> 🧳</span> : <span title="No bags"> 🏃‍♂️</span>}
+          </span>
+          {showProgress && <LabelProgressBar progress={progress} color="green" />}
         </div>
-      )}
+      </div>
     </div>
   );
 }; 

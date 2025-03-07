@@ -28,7 +28,7 @@ export const generateRandomPassenger = (id: string): Passenger => {
 // Generate a random bag for a passenger
 export const generateRandomBag = (passengerId: string, passengerName: string): Bag => {
   return {
-    id: `bag_${passengerId}`, // Use the full passenger ID to ensure uniqueness
+    id: `bag_${passengerId.substring('passenger_'.length)}`, // Use the full passenger ID to ensure uniqueness
     passenger_id: passengerId,
     passenger_name: passengerName,
     has_electronics: Math.random() > 0.3,

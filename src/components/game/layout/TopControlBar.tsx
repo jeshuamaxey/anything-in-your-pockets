@@ -1,17 +1,23 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { formatTime } from '@/lib/game-utils';
 import { GameState } from '@/types/gameTypes';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertCircle } from 'lucide-react';
 
 interface TopControlBarProps {
   gameState: GameState;
   toggleGame: () => void;
+  setGameState: (gameState: GameState) => void;
 }
 
 const TopControlBar = ({
   gameState,
+  setGameState,
   toggleGame
 }: TopControlBarProps) => {
+  const [dialogOpen, setDialogOpen] = useState(false);
+
   return (
     <div className="flex justify-between items-center border-b border-gray-300 p-4">
       <div className="text-sm py-1 font-['Press_Start_2P'] text-blue-800">
@@ -19,6 +25,45 @@ const TopControlBar = ({
       </div>
       
       <div className="flex items-center space-x-4">
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogTrigger asChild>
+            <Button 
+              variant="outline" 
+              className="relative"
+              onClick={() => setDialogOpen(true)}
+            >
+              <AlertCircle className="h-4 w-4" />
+              {gameState.errors.length > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+                  {gameState.errors.length}
+                </span>
+              )}
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="bg-white">
+            <DialogHeader>
+              <DialogTitle>System Errors</DialogTitle>
+            </DialogHeader>
+            <div className="max-h-[400px] overflow-y-auto">
+              {gameState.errors.length === 0 ? (
+                <p className="text-gray-500 text-sm">No errors to display</p>
+              ) : (
+                <div className="space-y-2">
+                  {gameState.errors.map((error, index) => (
+                    <div key={index} className="bg-red-50 border border-red-200 rounded p-2">
+                      <p className="text-sm text-red-700">{error.message}</p>
+                      <p className="text-xs text-red-500 mt-1">
+                        {new Date(error.timestamp).toLocaleTimeString()}
+                      </p>
+                    </div>
+                  ))}
+                  <Button onClick={() => setGameState({...gameState, errors: []})}>Clear Errors</Button>
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
         <Button 
           onClick={toggleGame}
           className={`w-24 ${gameState.paused ? "bg-green-500 hover:bg-green-600" : "bg-yellow-500 hover:bg-yellow-600"}`}

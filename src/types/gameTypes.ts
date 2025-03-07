@@ -63,13 +63,18 @@ export interface SecurityAgent {
   current_passenger_id: string | null;
 }
 
+const generateItemLabel = (id: string) => {
+  return id.split('_')[0][0] + '_' + id.slice(-3);
+}
+
 // Queue definition - an ordered array of passengers
-export class Queue<T extends {id: string}> {
+export class Queue<T extends {id: string, debug?: boolean}> {
   private items: T[];
   public capacity: number;
   public id: string;
+  public debug: boolean;
 
-  constructor({capacity, id}: {capacity: number, id: string}) {
+  constructor({capacity, id, debug = false}: {capacity: number, id: string, debug?: boolean}) {
     if(capacity < 1) {
       throw new Error('Capacity must be at least 1');
     }
@@ -77,26 +82,42 @@ export class Queue<T extends {id: string}> {
     this.items = [];
     this.capacity = capacity;
     this.id = id;
+    this.debug = debug;
   }
   
   // Add a passenger to the end of the queue
-  enqueue(item: T): void {
+  enqueue(item: T): T | undefined {
     // Check if passenger is already in the queue
     const existingItem = this.items.find(existingItem => existingItem.id === item.id);
     if (existingItem) {
-      console.warn(`Item ${item.id} is already in the queue!`);
-      return;
+      console.warn(`Queue ${this.id}: Item ${item.id} is already in the queue!`);
+      return undefined;
     }
     if(this.items.length === this.capacity) {
-      console.warn(`Queue ${this.id} is at capacity!`);
-      return;
+      console.warn(`Queue ${this.id}: At capacity (${this.capacity})!`);
+      return undefined;
     }
     this.items.push(item);
+
+    if(this.debug) {
+      console.log(`Queue ${this.id}: ${generateItemLabel(item.id)} enqueued (${this.items.length}/${this.capacity})`);
+    }
+    return item;
   }
   
   // Remove and return the passenger from the front of the queue
   dequeue(): T | undefined {
-    return this.items.shift();
+    const item = this.items.shift();
+    
+    if(this.debug) {
+      if(item) {
+        console.log(`Queue ${this.id}: ${generateItemLabel(item.id)} dequeued (${this.items.length}/${this.capacity})`);
+      } else {
+        console.log(`Queue ${this.id}: dequeue failed - queue empty`);
+      }
+    }
+
+    return item;
   }
   
   // Look at the passenger at the front of the queue without removing
@@ -128,7 +149,13 @@ export class Queue<T extends {id: string}> {
   removeById(id: string): boolean {
     const initialLength = this.items.length;
     this.items = this.items.filter(item => item.id !== id);
-    return initialLength !== this.items.length;
+    const removed = initialLength !== this.items.length;
+    
+    if(this.debug && removed) {
+      console.log(`Queue ${this.id}: Item ${id} removed by ID (${this.items.length}/${this.capacity})`);
+    }
+    
+    return removed;
   }
 }
 
@@ -152,7 +179,6 @@ export interface Scanner<T extends {id: string}> {
   is_operational: boolean;
   items_per_minute: number; // Number of items that can be processed per minute
   current_items: Queue<T>; // Items currently being scanned
-  capacity: number; // Maximum number of items that can be scanned simultaneously
   current_scan_progress: Record<string, number>; // Progress of current scans (0-100%) by item ID
   scan_accuracy: number; // Accuracy of the scanner (0-100%)
   last_processed_time: number; // Last time the scanner processed items (in ms)
@@ -160,12 +186,13 @@ export interface Scanner<T extends {id: string}> {
   current_scan_time_needed?: Record<string, number>; // Time needed to complete scan for each item (in seconds)
 }
 
-// Security Lane definition
 export interface SecurityLane {
   id: string;
   name: string;
   security_agents: SecurityAgent[];
   is_open: boolean;
+
+  total_added: number; // Number of passengers in the lane
   
   lane_line: Queue<Passenger>;
   bag_drop_line: Queue<Passenger>;
@@ -185,6 +212,11 @@ export interface SecurityLane {
   passengers_completed: Passenger[];
 }
 
+export interface Error {
+  message: string;
+  timestamp: number;
+}
+
 // Game state
 export interface GameState {
   passengers: Passenger[];
@@ -199,4 +231,5 @@ export interface GameState {
   last_spawn_time: number; // Last time a passenger was spawned (in ms)
   paused: boolean; // Whether the game is paused
   histogram_data: Record<number, number>; // Key: time interval (in seconds), Value: number of passengers processed
-} 
+  errors: Error[];
+}

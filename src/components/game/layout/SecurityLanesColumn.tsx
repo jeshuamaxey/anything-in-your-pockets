@@ -1,7 +1,7 @@
 import React from 'react';
 import { Passenger, SecurityLane, GameState } from '@/types/gameTypes';
 import { PassengerLabel } from '../common/PassengerLabel';
-import { countPassengersInLane } from '@/lib/game-utils';
+import { countPassengersInLane, getAllBagsInLane } from '@/lib/game-utils';
 import { Button } from '@/components/ui/button';
 import { BagLabel } from '../common/BagLabel';
 
@@ -46,7 +46,10 @@ export const SecurityLanesColumn = ({
             <div className="flex justify-between items-center mb-2 p-2">
               <div className="flex gap-2 items-center">
                 <h2 className="text font-bold">{lane.name}</h2>
-                <p className="text-xs text-gray-500">Passengers in lane: {countPassengersInLane(lane)}</p>
+                <p className="text-xs text-gray-500">Passengers in lane: {countPassengersInLane(lane)}
+                    &nbsp;| sense check: {lane.total_added - (lane.passengers_completed.length || 0)}
+                    &nbsp;| bags in lane: {getAllBagsInLane(lane).length}
+                </p>
               </div>
               <Button 
                 variant="outline" 
@@ -110,7 +113,7 @@ export const SecurityLanesColumn = ({
                 {/* Body Scanner */}
                 <div className="bg-gray-100 p-2 h-full border-t border-gray-300">
                   <h3 className="font-semibold text-sm mb-2">Body scanner</h3>
-                  <div className="text-xs mb-1">{lane.body_scanner.current_items.length} / {lane.body_scanner.capacity}</div>
+                  <div className="text-xs mb-1">{lane.body_scanner.current_items.length} / {lane.body_scanner.current_items.capacity}</div>
                   <div className="overflow-y-auto h-[120px]">
                     {lane.body_scanner.current_items.length > 0 ? (
                       <div className="space-y-1">
@@ -201,20 +204,24 @@ export const SecurityLanesColumn = ({
                 {/* Bag Scanner */}
                 <div className="bg-blue-50 p-2 h-full border-l border-t border-b border-gray-300">
                   <h3 className="font-semibold text-sm mb-2">Bag scanner</h3>
-                  <div className="text-xs mb-1">{lane.bag_scanner.current_items.length} / {lane.bag_scanner.capacity}</div>
+                  <div className="text-xs mb-1">{lane.bag_scanner.current_items.length} / {lane.bag_scanner.current_items.capacity}</div>
                   <div className="overflow-y-auto h-[120px]">
-                    {lane.bag_scanner.current_items.length > 0 ? (
+                    {lane.bag_scanner.current_items.length + lane.bag_scanner.waiting_items.length > 0 ? (
                       <div className="space-y-1">
                         {lane.bag_scanner.current_items.getAll().map(bag => {
-                          const passenger = gameState.passengers.find(p => p.bag?.id === bag.id);
-                          return passenger?.bag ? (
-                            <BagLabel
-                              key={bag.id}
-                              bag={bag}
-                              showProgress={bag.is_being_scanned}
-                              progress={lane.bag_scanner.current_scan_progress[bag.id]}
-                            />
-                          ) : null;
+                          return <BagLabel
+                            key={bag.id}
+                            bag={bag}
+                            showProgress={bag.is_being_scanned}
+                            progress={lane.bag_scanner.current_scan_progress[bag.id]}
+                          />
+                        })}
+                        {lane.bag_scanner.waiting_items.getAll().map(bag => {
+                          return <BagLabel
+                            key={bag.id}
+                            bag={bag}
+                            annotation="waiting..."
+                          />
                         })}
                       </div>
                     ) : (

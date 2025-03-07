@@ -30,7 +30,7 @@ export const PassengerLabel = ({
         <div className="flex items-center gap-1 justify-between">
           <span className="font-mono flex-1">
             {passenger.emoji} {passenger.id.slice(-3)}
-            {passenger.has_bag ? <span title="Has bags"> 🧳</span> : <span title="No bags"> 🏃‍♂️</span>}
+            {passenger.has_bag ? <span title="Has bags"> 🧳</span> : null}
           </span>
           {showProgress && <LabelProgressBar progress={progress} color="green" />}
         </div>

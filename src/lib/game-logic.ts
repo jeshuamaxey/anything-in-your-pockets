@@ -33,6 +33,7 @@ export const assignPassengerToLane = (gameState: GameState, setGameState: (gameS
   
   // Add the passenger to the security lane queue
   newLane.lane_line.enqueue(passenger);
+  newLane.total_added++;
   
   // Ensure the queue doesn't exceed capacity
   while (newLane.lane_line.length > LANE_LINE_CAPACITY) {
@@ -40,6 +41,7 @@ export const assignPassengerToLane = (gameState: GameState, setGameState: (gameS
     const excessPassenger = newLane.lane_line.dequeue();
     if (excessPassenger) {
       newGameState.main_queue.enqueue(excessPassenger);
+      newLane.total_added--;
     }
   }
   

@@ -3,7 +3,11 @@ import { GameState, SecurityAgent, SecurityLane, Scanner, Queue, Bag, Passenger 
 import {
   BAG_DROP_LINE_CAPACITY,
   BAG_PICKUP_AREA_CAPACITY,
+  BAG_SCANNER_SCANNING_CAPACITY,
+  BAG_SCANNER_WAITING_CAPACITY,
   BODY_SCANNER_LINE_CAPACITY,
+  BODY_SCANNER_SCANNING_CAPACITY,
+  BODY_SCANNER_WAITING_CAPACITY,
   INITIAL_SPAWN_RATE,
   LANE_LINE_CAPACITY,
   MAIN_LINE_CAPACITY
@@ -70,12 +74,11 @@ const initializeGameState = (): GameState => {
     type,
     is_operational: true,
     items_per_minute: type === 'bag' ? 10 : 0, // Only used for bag scanners now
-    current_items: new Queue<T>({capacity: 1, id: `current_items_${id}`}),
-    capacity: type === 'bag' ? 3 : 1, // Bag scanner can handle more items simultaneously
+    current_items: new Queue<T>({capacity: type === 'bag' ? BAG_SCANNER_SCANNING_CAPACITY : BODY_SCANNER_SCANNING_CAPACITY, id: `current_items_${id}`, debug: true}),
     current_scan_progress: {},
     scan_accuracy: 95,
     last_processed_time: Date.now(),
-    waiting_items: new Queue<T>({capacity: 1, id: `waiting_items_${id}`}),
+    waiting_items: new Queue<T>({capacity: type === 'bag' ? BAG_SCANNER_WAITING_CAPACITY : BODY_SCANNER_WAITING_CAPACITY, id: `waiting_items_${id}`, debug: true}),
     current_scan_time_needed: {},
   });
 
@@ -86,10 +89,11 @@ const initializeGameState = (): GameState => {
       name: info.name,
       security_agents: [securityAgents[index], securityAgents[index + 1]],
       is_open: true,
-      
+      total_added: 0,
+
       lane_line: new Queue({capacity: LANE_LINE_CAPACITY, id: `lane_line_${info.id}`}),
       bag_drop_line: new Queue({capacity: BAG_DROP_LINE_CAPACITY, id: `bag_drop_line_${info.id}`}),
-      bag_drop_unload: new Queue({capacity: BAG_DROP_LINE_CAPACITY, id: `bag_drop_unload_${info.id}`}),
+      bag_drop_unload: new Queue({capacity: BAG_DROP_LINE_CAPACITY, id: `bag_drop_unload_${info.id}`, debug: true}),
       body_scan_line: new Queue({capacity: BODY_SCANNER_LINE_CAPACITY, id: `body_scan_line_${info.id}`}),
       bag_pickup_area: new Queue({capacity: BAG_PICKUP_AREA_CAPACITY, id: `bag_pickup_area_${info.id}`}),
 
@@ -106,6 +110,7 @@ const initializeGameState = (): GameState => {
 
   // Create a new game state
   return {
+    errors: [],
     passengers: [],
     bags: [],
     security_agents: securityAgents,

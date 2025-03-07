@@ -2,7 +2,6 @@ import React from 'react';
 import { Passenger, SecurityLane, GameState } from '@/types/gameTypes';
 import { PassengerLabel } from '../common/PassengerLabel';
 import { countPassengersInLane } from '@/lib/game-utils';
-import { Button } from '@/components/ui/button';
 import { BagLabel } from '../common/BagLabel';
 import SecurityLaneZoneHeading from '../common/SecurityLaneZoneHeading';
 
@@ -21,17 +20,17 @@ export const SecurityLanesColumn = ({
     console.log('Lane:', lane);
     
     // Format the lane data for display
-    const laneInfo = `
-      Lane: ${lane.name}
-      Lane Line: ${lane.lane_line.length}
-      Bag Drop Line: ${lane.bag_drop_line.length}
-      Bag Drop Unload: ${lane.bag_drop_unload.length}
-      Body Scanner Line: ${lane.body_scan_line.length}
-      Bag Pickup Area: ${lane.bag_pickup_area.length}
-      Processing: ${countPassengersInLane(lane)}
-    `;
+    // const laneInfo = `
+    //   Lane: ${lane.name}
+    //   Lane Line: ${lane.lane_line.length}
+    //   Bag Drop Line: ${lane.bag_drop_line.length}
+    //   Bag Drop Unload: ${lane.bag_drop_unload.length}
+    //   Body Scanner Line: ${lane.body_scan_line.length}
+    //   Bag Pickup Area: ${lane.bag_pickup_area.length}
+    //   Processing: ${countPassengersInLane(lane)}
+    // `;
     
-    alert(laneInfo);
+    // alert(laneInfo);
   };
 
   return (
@@ -43,25 +42,17 @@ export const SecurityLanesColumn = ({
           return (
           <div key={`${lane.id}-${laneIndex}`} className="col-span-1 border first:border-t-0 border-l-0 border-b-0 border-gray-300">
             {/* Header */}
-            <div className="flex justify-between items-center mb-2 p-2">
-              <div className="flex gap-2 items-center">
+            <div className="flex justify-between items-center mb-0 p-2">
+              <div className="flex gap-2 items-center" onClick={() => debugLane(lane)}>
                 <h2 className="text font-bold">{lane.name}</h2>
                 <p className="text-xs text-gray-500">
                   Passengers in lane: {countPassengersInLane(lane)}
                 </p>
               </div>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => debugLane(lane)}
-                className="h-7 px-2 py-1 text-xs bg-gray-100"
-              >
-                Debug
-              </Button>
             </div>
             
             {/* Lane layout based on wireframe - 2 rows, 4 columns with arrows */}
-            <div className="flex flex-col gap-0 min-h-[450px] p-2 relative">
+            <div className="flex flex-col gap-0 min-h-[450px] p-2 pt-0 relative">
               {/* Top Row - Passenger Flow */}
               <div className="grid grid-cols-4 gap-0 h-[200px]">
                 {/* Lane Line */}

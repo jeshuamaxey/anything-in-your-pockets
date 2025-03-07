@@ -4,6 +4,7 @@ import { PassengerLabel } from '../common/PassengerLabel';
 import { countPassengersInLane } from '@/lib/game-utils';
 import { Button } from '@/components/ui/button';
 import { BagLabel } from '../common/BagLabel';
+import SecurityLaneZoneHeading from '../common/SecurityLaneZoneHeading';
 
 interface SecurityLanesColumnProps {
   gameState: GameState;
@@ -65,10 +66,8 @@ export const SecurityLanesColumn = ({
               <div className="grid grid-cols-4 gap-0 h-[200px]">
                 {/* Lane Line */}
                 <div className="bg-gray-100 p-2 h-full border-l border-t border-r border-gray-300">
-                  <h3 className="font-semibold text-sm mb-2">Lane line</h3>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span>{lane.lane_line.length} / {lane.lane_line.capacity}</span>
-                  </div>
+                  <SecurityLaneZoneHeading title="Lane line" nItems={lane.lane_line.length} capacity={lane.lane_line.capacity} />
+
                   <div className="overflow-y-auto h-[120px]">
                     {lane.lane_line.length > 0 ? (
                       <div className="space-y-1">
@@ -89,8 +88,11 @@ export const SecurityLanesColumn = ({
 
                 {/* Body Scanner Line */}
                 <div className="bg-gray-100 p-2 h-full border-t border-gray-300">
-                  <h3 className="font-semibold text-sm mb-2">Body scanner line</h3>
-                  <div className="text-xs mb-1">{lane.body_scan_line.length} / {lane.body_scan_line.capacity}</div>
+                  <SecurityLaneZoneHeading 
+                    title="Body scanner line"
+                    nItems={lane.body_scan_line.length}
+                    capacity={lane.body_scan_line.capacity}
+                  />
                   <div className="overflow-y-auto h-[120px]">
                     {lane.body_scan_line.length > 0 ? (
                       <div className="space-y-1">
@@ -110,8 +112,11 @@ export const SecurityLanesColumn = ({
 
                 {/* Body Scanner */}
                 <div className="bg-gray-100 p-2 h-full border-t border-gray-300">
-                  <h3 className="font-semibold text-sm mb-2">Body scanner</h3>
-                  <div className="text-xs mb-1">{lane.body_scanner.current_items.length} / {lane.body_scanner.current_items.capacity}</div>
+                  <SecurityLaneZoneHeading 
+                    title="Body scanner"
+                    nItems={lane.body_scanner.current_items.length}
+                    capacity={lane.body_scanner.current_items.capacity}
+                  />
                   <div className="overflow-y-auto h-[120px]">
                     {lane.body_scanner.current_items.length > 0 ? (
                       <div className="space-y-1">
@@ -133,8 +138,11 @@ export const SecurityLanesColumn = ({
 
                 {/* Bag Pickup */}
                 <div className="bg-gray-100 p-2 h-full border-t border-gray-300">
-                  <h3 className="font-semibold text-sm mb-2">Bag pickup</h3>
-                  <div className="text-xs mb-1">{lane.bag_pickup_area.length} / {lane.bag_pickup_area.capacity}</div>
+                  <SecurityLaneZoneHeading 
+                    title="Bag pickup"
+                    nItems={lane.bag_pickup_area.length}
+                    capacity={lane.bag_pickup_area.capacity}
+                  />
                   <div className="overflow-y-auto h-[120px]">
                     {lane.bag_pickup_area.length > 0 ? (
                       <div className="space-y-1">
@@ -157,8 +165,11 @@ export const SecurityLanesColumn = ({
               <div className="grid grid-cols-4 gap-0 h-[200px]">
                 {/* Bag Drop Line */}
                 <div className="bg-gray-100 p-2 h-full border-l border-b border-gray-300">
-                  <h3 className="font-semibold text-sm mb-2">Bag drop line</h3>
-                  <div className="text-xs mb-1">{lane.bag_drop_line.length} / {lane.bag_drop_line.capacity}</div>
+                  <SecurityLaneZoneHeading 
+                    title="Bag drop line"
+                    nItems={lane.bag_drop_line.length}
+                    capacity={lane.bag_drop_line.capacity}
+                  />
                   <div className="overflow-y-auto h-[120px]">
                     {lane.bag_drop_line.length > 0 ? (
                       <div className="space-y-1">
@@ -178,8 +189,11 @@ export const SecurityLanesColumn = ({
 
                 {/* Bag Drop */}
                 <div className="bg-gray-100 p-2 h-full border-b border-gray-300">
-                  <h3 className="font-semibold text-sm mb-2">Bag drop</h3>
-                  <div className="text-xs mb-1">{lane.bag_drop_unload.length} / {lane.bag_unloading_bays}</div>
+                  <SecurityLaneZoneHeading 
+                    title="Bag drop"
+                    nItems={lane.bag_drop_unload.length}
+                    capacity={lane.bag_unloading_bays}
+                  />
                   <div className="overflow-y-auto h-[120px]">
                     {lane.bag_drop_unload.length > 0 ? (
                       <div className="space-y-1">
@@ -201,8 +215,11 @@ export const SecurityLanesColumn = ({
 
                 {/* Bag Scanner */}
                 <div className="bg-blue-50 p-2 h-full border-l border-t border-b border-gray-300">
-                  <h3 className="font-semibold text-sm mb-2">Bag scanner</h3>
-                  <div className="text-xs mb-1">{lane.bag_scanner.current_items.length} / {lane.bag_scanner.current_items.capacity}</div>
+                  <SecurityLaneZoneHeading 
+                    title="Bag scanner"
+                    nItems={lane.bag_scanner.current_items.length}
+                    capacity={lane.bag_scanner.current_items.capacity}
+                  />
                   <div className="overflow-y-auto h-[120px]">
                     {lane.bag_scanner.current_items.length + lane.bag_scanner.waiting_items.length > 0 ? (
                       <div className="space-y-1">
@@ -230,8 +247,11 @@ export const SecurityLanesColumn = ({
 
                 {/* Bag Off Ramp */}
                 <div className="bg-blue-50 p-2 h-full border-r border-b border-gray-300">
-                  <h3 className="font-semibold text-sm mb-2">Bag off ramp</h3>
-                  <div className="text-xs mb-1">{lane.bag_scanner_off_ramp.length} / {lane.bag_scanner_off_ramp.capacity}</div>
+                  <SecurityLaneZoneHeading 
+                    title="Bag off ramp"
+                    nItems={lane.bag_scanner_off_ramp.length}
+                    capacity={lane.bag_scanner_off_ramp.capacity}
+                  />
                   <div className="overflow-y-auto h-[120px]">
                     {lane.bag_scanner_off_ramp.length > 0 ? (
                       <div className="space-y-1">

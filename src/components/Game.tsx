@@ -118,8 +118,9 @@ const Game = () => {
   }, [gameState.game_over]);
 
   return (
-    <div className="flex flex-col flex-1 min-w-full min-h-0"> {/* min-h-0 is crucial for flex child scrolling */}
-      {(showOverlay) && (
+    // Make this the full viewport height and width, and prevent overflow
+    <div className="h-screen w-screen flex flex-col overflow-hidden">
+      {showOverlay && (
         <GameOverlay 
           onClose={handleOverlayClose}
           isGameOver={gameState.game_over}
@@ -127,29 +128,41 @@ const Game = () => {
         />
       )}
       
-      {/* Top Controls Bar */}
-      <TopControlBar
-        gameState={gameState}
-        toggleGame={toggleGame}
-        setGameState={setGameState}
-      />
+      {/* Fixed height header */}
+      <div className="flex-none">
+        <TopControlBar
+          gameState={gameState}
+          toggleGame={toggleGame}
+          setGameState={setGameState}
+        />
+      </div>
 
-      {/* Main UI */}
-      <div className="flex flex-1 ">
+      {/* Main content area - fills remaining height */}
+      <div className="flex flex-1 min-h-0"> {/* min-h-0 is crucial for nested flex scrolling */}
         {/* Left Column - Security Queue */}
-        <div className="w-1/5 border-r border-gray-300 flex flex-col min-h-0"> {/* min-h-0 allows flex child to scroll */}
-          <SecurityQueue setSelectedPassenger={setSelectedPassenger} gameState={gameState} setGameState={setGameState} />
+        <div className="w-1/5 border-r border-gray-300 overflow-y-auto">
+          <SecurityQueue 
+            setSelectedPassenger={setSelectedPassenger} 
+            gameState={gameState} 
+            setGameState={setGameState}
+          />
         </div>
 
         {/* Center Column - Security Lanes */}
-        <div className="flex-1 flex flex-col min-h-0">
-          {/* Main Content Area - Scrollable */}
-          <SecurityLanesColumn onSelectPassenger={setSelectedPassenger} gameState={gameState} />
+        <div className="flex-1 overflow-y-auto">
+          <SecurityLanesColumn 
+            onSelectPassenger={setSelectedPassenger} 
+            gameState={gameState} 
+          />
         </div>
 
         {/* Right Column - System Status */}
-        <div className="w-1/5 border-l border-gray-300 flex flex-col min-h-0 p-2">
-          <SystemStatusColumn gameState={gameState} selectedPassenger={selectedPassenger} setSelectedPassenger={setSelectedPassenger} />
+        <div className="w-1/5 border-l border-gray-300 overflow-y-auto p-2">
+          <SystemStatusColumn 
+            gameState={gameState} 
+            selectedPassenger={selectedPassenger} 
+            setSelectedPassenger={setSelectedPassenger} 
+          />
         </div>
       </div>
     </div>

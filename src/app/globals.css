@@ -70,13 +70,13 @@
 
 /* Pixel font styling */
 .pixel-font {
-  font-family: 'Press Start 2P', monospace;
+  font-family: var(--font-press-start);
   letter-spacing: 1px;
 }
 
 /* Retro button styling */
 .retro-button {
-  font-family: 'Press Start 2P', monospace;
+  font-family: var(--font-press-start);
   padding: 10px 20px;
   background-color: #4CAF50;
   color: white;

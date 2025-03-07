@@ -4,6 +4,7 @@ import { formatTime } from '@/lib/game-utils';
 import { GameState } from '@/types/gameTypes';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertCircle } from 'lucide-react';
+import { GAME_OVER_TIMEOUT_MS } from '@/lib/game-constants';
 
 interface TopControlBarProps {
   gameState: GameState;
@@ -63,6 +64,10 @@ const TopControlBar = ({
             </div>
           </DialogContent>
         </Dialog>
+
+        {gameState.queue_at_capacity_start_time && (<p className="text-sm font-mono text-red-500">
+          {(Math.max(0, GAME_OVER_TIMEOUT_MS - (Date.now() - gameState.queue_at_capacity_start_time)) / 1000).toFixed(1)}s left
+        </p>)}
 
         <Button 
           onClick={toggleGame}

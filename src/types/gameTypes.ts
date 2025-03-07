@@ -232,4 +232,9 @@ export interface GameState {
   paused: boolean; // Whether the game is paused
   histogram_data: Record<number, number>; // Key: time interval (in seconds), Value: number of passengers processed
   errors: Error[];
+
+  game_start_time: number | null; // Last time the game was started (in ms)
+  game_over_time: number | null; // Last time the game was over (in ms)
+  queue_at_capacity_start_time: number | null; // Last time the queue was at capacity (in ms)
+  game_over: boolean; // Whether the game is over
 }

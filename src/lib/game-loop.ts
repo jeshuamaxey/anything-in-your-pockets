@@ -1,5 +1,5 @@
 import { debugLog, generatePassengerId, getAllLanePassengers, normalDistribution } from "./game-utils";
-
+import { GAME_OVER_TIMEOUT_MS } from "./game-constants";
 import { GameState } from "@/types/gameTypes";
 import { SetStateAction } from "react";
 import { Dispatch } from "react";
@@ -18,6 +18,23 @@ export const getTick = (gameState: GameState, setGameState: Dispatch<SetStateAct
       // const updateStartTime = performance.now();
       const newState = { ...prevState };
       const currentTime = Date.now();
+
+      // Check if the main queue is at capacity
+      const isQueueAtCapacity = newState.main_queue.length >= newState.main_queue.capacity;
+
+      if (isQueueAtCapacity) {
+        if (!newState.queue_at_capacity_start_time) {
+          newState.queue_at_capacity_start_time = currentTime; // Start timing
+        } else if (currentTime - newState.queue_at_capacity_start_time >= GAME_OVER_TIMEOUT_MS) { // 10 seconds
+          newState.paused = true;
+          newState.game_over = true;
+          newState.game_over_time = currentTime;
+
+          return newState;
+        }
+      } else {
+        newState.queue_at_capacity_start_time = null; // Reset if not at capacity
+      }
       
       // Update game time
       newState.time = prevState.time + (GAME_TICK_MS / 1000);

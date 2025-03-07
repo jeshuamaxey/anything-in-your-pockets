@@ -1,4 +1,5 @@
 export const GAME_TICK_MS = 100; // Update game state every 100ms
+export const GAME_OVER_TIMEOUT_MS = 10000; // 10 seconds
 
 export const INITIAL_PASSENGERS = 3; // Number of passengers to spawn initially
 export const INITIAL_SPAWN_RATE = 40; // passengers per minute (changed from 100 to a more reasonable value)

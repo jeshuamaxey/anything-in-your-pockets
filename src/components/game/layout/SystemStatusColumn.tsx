@@ -18,7 +18,7 @@ const SystemStatusColumn = ({
   }: SystemStatusColumnProps) => {
   return <>
     {/* System Status */}
-    <h2 className="text-xl font-bold mb-3">SYSTEM STATUS</h2>
+    <h2 className="text-lg font-bold mb-3">SYSTEM STATUS</h2>
     
     {/* Histogram */}
     <div className="mb-4 h-64 bg-white">
@@ -35,7 +35,6 @@ const SystemStatusColumn = ({
           <PassengerLabel 
             passenger={passenger} 
             onClick={setSelectedPassenger}
-            showDetails={true}
           />
         </div>
       ))}

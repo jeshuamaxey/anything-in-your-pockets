@@ -23,8 +23,8 @@ const SecurityQueue = ({
   };
 
   return <>
-    <div className="p-4 border-b border-gray-300">
-      <h2 className="text-xl font-bold mb-3">SECURITY QUEUE</h2>
+    <div className="p-2 border-b border-gray-300">
+      <h2 className="text-lg font-bold mb-3">SECURITY QUEUE</h2>
       
       {/* Queue Capacity Progress Bar */}
       <div className="mb-3">
@@ -53,7 +53,6 @@ const SecurityQueue = ({
           <PassengerLabel 
             passenger={passenger} 
             onClick={setSelectedPassenger}
-            showDetails={true}
           />
           <div className="mt-1">
             <div className="text-xs font-semibold mb-1">Assign to lane:</div>

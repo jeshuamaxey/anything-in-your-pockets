@@ -14,7 +14,7 @@ import {
 } from "@/lib/game-constants";
 
 // Initialize a new game state
-const initializeGameState = (): GameState => {
+export const initializeGameState = (): GameState => {
   // Create initial security agents
   const securityAgents: SecurityAgent[] = [ 
     {
@@ -121,7 +121,11 @@ const initializeGameState = (): GameState => {
     spawn_rate: INITIAL_SPAWN_RATE,
     last_spawn_time: Date.now(),
     paused: true, // Ensure the game starts in a paused state
-    histogram_data: { 0: 0 } // Initialize with zero passengers at time 0
+    histogram_data: { 0: 0 }, // Initialize with zero passengers at time 0
+    queue_at_capacity_start_time: null,
+    game_over: false,
+    game_start_time: null,
+    game_over_time: null
   };
 };
 
@@ -130,5 +134,5 @@ const useGameState = (): [GameState, Dispatch<SetStateAction<GameState>>] => {
 
   return [gameState, setGameState];
 }
-
 export default useGameState;
+

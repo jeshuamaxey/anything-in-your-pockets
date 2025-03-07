@@ -191,25 +191,25 @@ export interface SecurityLane {
   name: string;
   security_agents: SecurityAgent[];
   is_open: boolean;
+  total_added: number; // Total number of passengers that have entered this lane
 
-  total_added: number; // Number of passengers in the lane
-  
-  lane_line: Queue<Passenger>;
-  bag_drop_line: Queue<Passenger>;
-  bag_drop_unload: Queue<Passenger>;
-  body_scan_line: Queue<Passenger>;
-  body_scanner: Scanner<Passenger>;
-  bag_pickup_area: Queue<Passenger>;
-  
-  bag_scanner: Scanner<Bag>;
-  bag_scanner_off_ramp: Queue<Bag>;
+  // Passenger Flow Queues (primary source of truth)
+  lane_line: Queue<Passenger>;          // Initial lane queue
+  bag_drop_line: Queue<Passenger>;      // Waiting to unload bags
+  bag_drop_unload: Queue<Passenger>;    // Currently unloading bags
+  body_scan_line: Queue<Passenger>;     // Waiting for body scan
+  bag_pickup_area: Queue<Passenger>;    // Waiting to collect bags
 
-  bag_unloading_bays: number;
-  passengers_unloading_bags: Passenger[];
-  
-  passengers_in_body_scanner_queue: Passenger[];
-  // passengers_waiting_for_bags: Passenger[];
-  passengers_completed: Passenger[];
+  // Scanner States
+  body_scanner: Scanner<Passenger>;     // Body scanner state and queue
+  bag_scanner: Scanner<Bag>;           // Bag scanner state and queue
+  bag_scanner_off_ramp: Queue<Bag>;    // Completed bags waiting for pickup
+
+  // Configuration
+  bag_unloading_bays: number;          // Number of simultaneous bag unloading spots
+
+  // Completed passengers are tracked in GameState.completed
+  // All passenger data should be accessed through the queues above
 }
 
 export interface Error {

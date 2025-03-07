@@ -1,7 +1,7 @@
 export const GAME_TICK_MS = 100; // Update game state every 100ms
 
 export const INITIAL_PASSENGERS = 3; // Number of passengers to spawn initially
-export const INITIAL_SPAWN_RATE = 100; // passengers per minute (changed from 100 to a more reasonable value)
+export const INITIAL_SPAWN_RATE = 40; // passengers per minute (changed from 100 to a more reasonable value)
 
 export const HISTOGRAM_INTERVAL = 30; // Seconds per histogram bar
 export const MAX_QUEUE_DISPLAY_LENGTH = 10; // Maximum number of passengers to display in the queue

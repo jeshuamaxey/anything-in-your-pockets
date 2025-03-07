@@ -198,7 +198,6 @@ export const getTick = (gameState: GameState, setGameState: Dispatch<SetStateAct
               } else {
                 // No bag, move directly to completed
                 passenger.security_cleared_timestamp = Date.now();
-                updatedLane.passengers_completed.push(passenger);
                 newState.completed.push(passenger);
                 newState.histogram_data = incrementHistogramData(newState, newState.time);
               }
@@ -233,7 +232,7 @@ export const getTick = (gameState: GameState, setGameState: Dispatch<SetStateAct
             
             // Find the passenger who owns this bag
             const passenger = getAllLanePassengers(updatedLane).find(p => p.bag?.id === nextBag.id);
-            // const passenger = newState.passengers.find(p => p.bag?.id === nextBag.id);
+
             if (!passenger?.bag) {
               console.warn(`[Lane ${lane.id}] No passenger found for bag ${nextBag.id}, or passenger has no bag`);
               setGameState(prevState => ({
@@ -276,7 +275,54 @@ export const getTick = (gameState: GameState, setGameState: Dispatch<SetStateAct
           debugLog(updatedLane.id, ` Processing ${bagsInScanner.length} bags in scanner`);
 
           for (const bag of bagsInScanner) {
-            // Update scan progress
+            // Find the passenger who owns this bag
+            const passenger = getAllLanePassengers(updatedLane).find(p => p.bag?.id === bag.id);
+            if (!passenger) {
+              console.warn(`[Lane ${lane.id}] No passenger found for bag ${bag.id}, or passenger has no bag`);
+              setGameState(prevState => ({
+                ...prevState,
+                paused: true,
+                errors: [...prevState.errors, {
+                  message: `No passenger found for bag ${bag.id}, or passenger has no bag`,
+                  timestamp: Date.now()
+                }]
+              }));
+              continue;
+            }
+            
+            const passengerBag = passenger.bag!;
+
+            // Try to move completed bags to off ramp
+            let bagMoved = false;
+            if (passengerBag.scan_complete) {
+              debugLog(lane.id, ` Found completed bag ${bag.id} in scanner, attempting to move to off ramp`);
+              
+              if (updatedLane.bag_scanner_off_ramp.length < updatedLane.bag_scanner_off_ramp.capacity) {
+                // Try to add to off ramp first before removing from scanner
+                const offRampResult = updatedLane.bag_scanner_off_ramp.enqueue(passengerBag);
+                
+                if (offRampResult) {
+                  // Only remove from scanner if off ramp enqueue succeeded
+                  const removeResult = updatedLane.bag_scanner.current_items.removeById(passengerBag.id);
+                  delete updatedLane.bag_scanner.current_scan_progress[passengerBag.id];
+                  
+                  debugLog(lane.id, ` Successfully moved completed bag ${passengerBag.id} to off ramp:`, {
+                    removeSuccess: removeResult,
+                    off_ramp_length: updatedLane.bag_scanner_off_ramp.length
+                  });
+                  bagMoved = true;
+                } else {
+                  debugLog(lane.id, ` Failed to add bag ${passengerBag.id} to off ramp, keeping in scanner`);
+                }
+              } else {
+                debugLog(lane.id, ` Off ramp full, keeping completed bag ${passengerBag.id} in scanner`);
+              }
+            }
+
+            // Skip scan progress update if bag was moved
+            if (bagMoved) continue;
+
+            // Update scan progress for incomplete bags
             const currentProgress = updatedLane.bag_scanner.current_scan_progress[bag.id] || 0;
             const progressIncrement = (updatedLane.bag_scanner.items_per_minute / 60) * (GAME_TICK_MS / 1000) * 100;
             const newProgress = Math.min(100, currentProgress + progressIncrement);
@@ -285,58 +331,39 @@ export const getTick = (gameState: GameState, setGameState: Dispatch<SetStateAct
             debugLog(lane.id, ` Bag ${bag.id} scan progress:`, JSON.stringify({
               current: currentProgress,
               increment: progressIncrement,
-              new: newProgress
+              new: newProgress,
+              is_complete: bag.scan_complete,
+              is_scanning: bag.is_being_scanned
             }));
             
             // Check if scan is complete
             if (newProgress >= 100) {
-              // Find the passenger who owns this bag
-              const passenger = newState.passengers.find(p => p.bag?.id === bag.id);
-              if (passenger?.bag) {
-                debugLog(lane.id, ` Bag ${bag.id} scan complete, moving to off ramp`);
-                
-                // Update bag status and move to off ramp
-                passenger.bag.is_being_scanned = false;
-                passenger.bag.scan_complete = true;
-                passenger.bag_scanner_complete_timestamp = Date.now();
-                
-                // Remove from scanner
-                const removeResult = updatedLane.bag_scanner.current_items.removeById(bag.id);
-                debugLog(lane.id, ` Remove result for bag ${bag.id}:`, {
-                  success: removeResult,
-                  scanner_length: updatedLane.bag_scanner.current_items.length
-                });
-
-                delete updatedLane.bag_scanner.current_scan_progress[bag.id];
-                
-                // Add to off ramp
+              debugLog(lane.id, ` Bag ${bag.id} scan complete, checking off ramp capacity`);
+              
+              // Mark scan as complete regardless of off ramp status
+              passengerBag.scan_complete = true;
+              passenger.bag_scanner_complete_timestamp = Date.now();
+              
+              // Only move to off ramp if there's space
+              if (updatedLane.bag_scanner_off_ramp.length < updatedLane.bag_scanner_off_ramp.capacity) {
+                // Try to add to off ramp first before removing from scanner
                 const offRampResult = updatedLane.bag_scanner_off_ramp.enqueue(bag);
-                debugLog(lane.id, ` Off ramp enqueue result for bag ${bag.id}:`, {
-                  success: offRampResult !== undefined,
-                  off_ramp_length: updatedLane.bag_scanner_off_ramp.length,
-                  off_ramp_capacity: updatedLane.bag_scanner_off_ramp.capacity
-                });
                 
-                // Check if passenger is waiting in bag pickup area
-                const waitingPassenger = updatedLane.bag_pickup_area.findById(passenger.id);
-                if (waitingPassenger) {
-                  debugLog(lane.id, ` Passenger ${passenger.id} was waiting for bag ${bag.id}, moving to completed`);
-                  // Bag is scanned, passenger can pick it up
-                  passenger.bag_on_person = true;
-                  passenger.waiting_for_bag_finished_timestamp = Date.now();
-                  passenger.security_cleared_timestamp = Date.now();
+                if (offRampResult) {
+                  // Only update status and remove from scanner if off ramp enqueue succeeded
+                  passengerBag.is_being_scanned = false;
+                  const removeResult = updatedLane.bag_scanner.current_items.removeById(passengerBag.id);
+                  delete updatedLane.bag_scanner.current_scan_progress[passengerBag.id];
                   
-                  // Move to completed
-                  updatedLane.passengers_completed.push(passenger);
-                  newState.completed.push(passenger);
-                  
-                  // Update histogram
-                  newState.histogram_data = incrementHistogramData(newState, newState.time);
-                  
-                  // Remove from bag pickup area and off ramp
-                  updatedLane.bag_pickup_area.removeById(passenger.id);
-                  updatedLane.bag_scanner_off_ramp.removeById(bag.id);
+                  debugLog(lane.id, ` Successfully moved newly completed bag ${bag.id} to off ramp:`, {
+                    removeSuccess: removeResult,
+                    off_ramp_length: updatedLane.bag_scanner_off_ramp.length
+                  });
+                } else {
+                  debugLog(lane.id, ` Failed to add bag ${bag.id} to off ramp, keeping in scanner`);
                 }
+              } else {
+                debugLog(lane.id, ` Off ramp full, keeping completed bag ${bag.id} in scanner`);
               }
             }
           }
@@ -356,7 +383,6 @@ export const getTick = (gameState: GameState, setGameState: Dispatch<SetStateAct
               passenger.security_cleared_timestamp = Date.now();
               
               // Move to completed
-              updatedLane.passengers_completed.push(passenger);
               newState.completed.push(passenger);
               
               // Update histogram

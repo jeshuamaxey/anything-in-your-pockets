@@ -1,7 +1,7 @@
 import React from 'react';
 import { Passenger, SecurityLane, GameState } from '@/types/gameTypes';
 import { PassengerLabel } from '../common/PassengerLabel';
-import { countPassengersInLane, getAllBagsInLane } from '@/lib/game-utils';
+import { countPassengersInLane } from '@/lib/game-utils';
 import { Button } from '@/components/ui/button';
 import { BagLabel } from '../common/BagLabel';
 
@@ -27,7 +27,6 @@ export const SecurityLanesColumn = ({
       Bag Drop Unload: ${lane.bag_drop_unload.length}
       Body Scanner Line: ${lane.body_scan_line.length}
       Bag Pickup Area: ${lane.bag_pickup_area.length}
-      Completed: ${lane.passengers_completed.length}
       Processing: ${countPassengersInLane(lane)}
     `;
     
@@ -46,9 +45,8 @@ export const SecurityLanesColumn = ({
             <div className="flex justify-between items-center mb-2 p-2">
               <div className="flex gap-2 items-center">
                 <h2 className="text font-bold">{lane.name}</h2>
-                <p className="text-xs text-gray-500">Passengers in lane: {countPassengersInLane(lane)}
-                    &nbsp;| sense check: {lane.total_added - (lane.passengers_completed.length || 0)}
-                    &nbsp;| bags in lane: {getAllBagsInLane(lane).length}
+                <p className="text-xs text-gray-500">
+                  Passengers in lane: {countPassengersInLane(lane)}
                 </p>
               </div>
               <Button 
@@ -237,15 +235,12 @@ export const SecurityLanesColumn = ({
                   <div className="overflow-y-auto h-[120px]">
                     {lane.bag_scanner_off_ramp.length > 0 ? (
                       <div className="space-y-1">
-                        {lane.bag_scanner_off_ramp.getAll().map(bag => {
-                          const passenger = gameState.passengers.find(p => p.bag?.id === bag.id);
-                          return passenger?.bag ? (
-                            <BagLabel 
-                              key={bag.id}
-                              bag={bag}
-                            />
-                          ) : null;
-                        })}
+                        {lane.bag_scanner_off_ramp.getAll().map(bag => (
+                          <BagLabel 
+                            key={bag.id}
+                            bag={bag}
+                          />
+                        ))}
                       </div>
                     ) : (
                       <div className="text-gray-400 text-xs italic">No bags waiting</div>

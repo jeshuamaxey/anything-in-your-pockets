@@ -85,28 +85,27 @@ const initializeGameState = (): GameState => {
   // Create initial security lanes
   const securityLaneInfo = [{id: 'lane_1', name: 'LANE 1'}, {id: 'lane_2', name: 'LANE 2'}];
   const securityLanes: SecurityLane[] = securityLaneInfo.map((info, index) => ({
-      id: info.id,
-      name: info.name,
-      security_agents: [securityAgents[index], securityAgents[index + 1]],
-      is_open: true,
-      total_added: 0,
+    id: info.id,
+    name: info.name,
+    security_agents: [securityAgents[index], securityAgents[index + 1]],
+    is_open: true,
+    total_added: 0,
 
-      lane_line: new Queue({capacity: LANE_LINE_CAPACITY, id: `lane_line_${info.id}`}),
-      bag_drop_line: new Queue({capacity: BAG_DROP_LINE_CAPACITY, id: `bag_drop_line_${info.id}`}),
-      bag_drop_unload: new Queue({capacity: BAG_DROP_LINE_CAPACITY, id: `bag_drop_unload_${info.id}`, debug: true}),
-      body_scan_line: new Queue({capacity: BODY_SCANNER_LINE_CAPACITY, id: `body_scan_line_${info.id}`}),
-      bag_pickup_area: new Queue({capacity: BAG_PICKUP_AREA_CAPACITY, id: `bag_pickup_area_${info.id}`}),
+    // Passenger Flow Queues
+    lane_line: new Queue({capacity: LANE_LINE_CAPACITY, id: `lane_line_${info.id}`}),
+    bag_drop_line: new Queue({capacity: BAG_DROP_LINE_CAPACITY, id: `bag_drop_line_${info.id}`}),
+    bag_drop_unload: new Queue({capacity: BAG_DROP_LINE_CAPACITY, id: `bag_drop_unload_${info.id}`, debug: true}),
+    body_scan_line: new Queue({capacity: BODY_SCANNER_LINE_CAPACITY, id: `body_scan_line_${info.id}`}),
+    bag_pickup_area: new Queue({capacity: BAG_PICKUP_AREA_CAPACITY, id: `bag_pickup_area_${info.id}`}),
 
-      bag_scanner: createScanner<Bag>(`bag_scanner_${info.id}`, `Bag Scanner ${index}`, 'bag'),
-      body_scanner: createScanner<Passenger>(`body_scanner_${info.id}`, `Body Scanner ${index}`, 'person'),
-      bag_scanner_off_ramp: new Queue({capacity: BAG_PICKUP_AREA_CAPACITY, id: `bag_scanner_off_ramp_${info.id}`}),
+    // Scanner States
+    body_scanner: createScanner<Passenger>(`body_scanner_${info.id}`, `Body Scanner ${index}`, 'person'),
+    bag_scanner: createScanner<Bag>(`bag_scanner_${info.id}`, `Bag Scanner ${index}`, 'bag'),
+    bag_scanner_off_ramp: new Queue({capacity: BAG_PICKUP_AREA_CAPACITY, id: `bag_scanner_off_ramp_${info.id}`, debug: true}),
 
-      bag_unloading_bays: 3,
-      passengers_unloading_bags: [],
-      passengers_in_body_scanner_queue: [],
-      passengers_completed: []
-    })
-  );
+    // Configuration
+    bag_unloading_bays: 3
+  }));
 
   // Create a new game state
   return {

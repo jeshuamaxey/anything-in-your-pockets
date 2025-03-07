@@ -27,8 +27,7 @@ export const countPassengersInLane = (lane: SecurityLane): number => {
     lane.bag_drop_unload.length +
     lane.body_scan_line.length +
     lane.bag_pickup_area.length +
-    lane.body_scanner.current_items.length +
-    lane.passengers_unloading_bags.length
+    lane.body_scanner.current_items.length
   );
 };
 
@@ -42,18 +41,21 @@ export const countPassengersInLane = (lane: SecurityLane): number => {
 // };
 
 export const getAllBagsInLane = (lane: SecurityLane): Bag[] => {
+  // Get bags from passengers in queues
   const lane_line_bags = lane.lane_line.getAll().map(passenger => passenger.bag);
   const bag_drop_line_bags = lane.bag_drop_line.getAll().map(passenger => passenger.bag);
   const bag_drop_unload_bags = lane.bag_drop_unload.getAll().map(passenger => passenger.bag);
 
-  return [
-    ...lane_line_bags,
-    ...bag_drop_line_bags,
-    ...bag_drop_unload_bags,
+  // Get bags directly in scanner queues
+  const scanner_bags = [
     ...lane.bag_scanner.waiting_items.getAll(),
     ...lane.bag_scanner.current_items.getAll(),
     ...lane.bag_scanner_off_ramp.getAll(),
-  ].filter(bag => bag !== null) as Bag[];
+  ];
+
+  // Combine and filter out null bags
+  return [...lane_line_bags, ...bag_drop_line_bags, ...bag_drop_unload_bags, ...scanner_bags]
+    .filter((bag): bag is Bag => bag !== null);
 };
 
 export const getAllLanePassengers = (lane: SecurityLane): Passenger[] => {
@@ -64,13 +66,10 @@ export const getAllLanePassengers = (lane: SecurityLane): Passenger[] => {
     ...lane.body_scan_line.getAll(),
     ...lane.bag_pickup_area.getAll(),
     ...lane.body_scanner.current_items.getAll(),
-    ...lane.passengers_unloading_bags,
   ]
 
   return all.filter(passenger => passenger !== null) as Passenger[];
 };
-
-
 
 // Calculate duration between two timestamps
 export const calculateDuration = (start?: number, end?: number) => {
@@ -115,4 +114,21 @@ export const incrementHistogramData = (state: GameState, time: number) => {
   const newHistogramData = updateHistogramData(state);
   newHistogramData[timeInterval] = (newHistogramData[timeInterval] || 0) + 1;
   return newHistogramData;
+};
+
+// Helper to find a passenger's bag in any lane
+export const findBagInLanes = (gameState: GameState, passengerId: string): Bag | null => {
+  for (const lane of gameState.security_lanes) {
+    const bags = getAllBagsInLane(lane);
+    const bag = bags.find(b => b.passenger_id === passengerId);
+    if (bag) return bag;
+  }
+  return null;
+};
+
+// Helper to find which lane a passenger's bag is in
+export const findLaneWithBag = (gameState: GameState, passengerId: string): SecurityLane | null => {
+  return gameState.security_lanes.find(lane => 
+    getAllBagsInLane(lane).some(b => b.passenger_id === passengerId)
+  ) || null;
 };

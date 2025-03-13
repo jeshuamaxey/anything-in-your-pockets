@@ -82,7 +82,7 @@ export const calculateDuration = (start?: number, end?: number) => {
 
 // Format duration for display
 export const formatDuration = (durationSeconds: number) => {
-  if (durationSeconds === 0) return 'N/A';
+  if (durationSeconds === 0) return '0s';
   const seconds = durationSeconds % 60;
   const minutes = Math.floor(durationSeconds / 60);
   

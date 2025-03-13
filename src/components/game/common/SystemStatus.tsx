@@ -17,8 +17,10 @@ const SystemStatus = ({
     const completedPassengersWithBags = gameState.completed.filter(p => !!p.bag);
     const bagsWithSuspiciousItems = completedPassengersWithBags.filter(p => p.bag?.has_suspicious_item).map(p => p.bag);
     const suspiciousItemsInvestigated = bagsWithSuspiciousItems.filter(bag => bag?.suspicious_item_dealt_with).length;
-    const avTime = gameState.completed.reduce((acc, passenger) => acc + ((passenger.security_cleared_timestamp || 0) - (passenger.spawned_timestamp || 0)), 0) / ( gameState.completed.length * 1000 );
+    const suspiciousItemsDetected = suspiciousItemsInvestigated/bagsWithSuspiciousItems.length || 0;
+    const avTime = (gameState.completed.reduce((acc, passenger) => acc + ((passenger.security_cleared_timestamp || 0) - (passenger.spawned_timestamp || 0)), 0) / ( gameState.completed.length * 1000 )) || 0;
 
+    console.log({avTime})
     const selectedPassenger = gameState.selected_passenger;
     const setSelectedPassenger = (passenger: Passenger | null) => {
       gameState.selected_passenger = passenger;
@@ -37,7 +39,7 @@ const SystemStatus = ({
     <div className="grid grid-cols-2 gap-2 p-2 mb-4">
       <StatCard title="Passengers processed" value={gameState.completed.length} />
       <StatCard title="Passengers with bags" value={completedPassengersWithBags.length} />
-      <StatCard title="Suspicious items detected" value={suspiciousItemsInvestigated/bagsWithSuspiciousItems.length} percentage />
+      <StatCard title="Suspicious items detected" value={suspiciousItemsDetected} percentage />
       <StatCard title="Av time" value={avTime} duration />
     </div>
 

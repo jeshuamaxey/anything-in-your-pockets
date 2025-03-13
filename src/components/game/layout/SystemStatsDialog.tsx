@@ -28,7 +28,7 @@ const SystemStatsDialog = ({
           <ChartColumn className="h-4 w-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="bg-background">
         <DialogHeader>
           <DialogTitle>System Stats</DialogTitle>
           <DialogDescription>

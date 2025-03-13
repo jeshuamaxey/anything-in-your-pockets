@@ -207,6 +207,8 @@ export const SecurityLanesColumn = ({
                             bag={bag}
                             showProgress={bag.is_being_scanned}
                             progress={lane.bag_scanner.current_scan_progress[bag.id]}
+                            suspicionIndicator
+                            onClick={() => bag.suspicion_dealt_with = true}
                           />
                         })}
                         {lane.bag_scanner.waiting_items.getAll().map(bag => {

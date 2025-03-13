@@ -51,6 +51,7 @@ export interface Bag {
   is_flagged: boolean; // Whether the bag has been flagged for inspection
   scan_complete: boolean; // Whether the bag has completed scanning
   is_unloaded: boolean; // Whether the bag has been unloaded onto the scanner belt
+  suspicion_dealt_with: boolean; // Whether the bag's suspicious item has been dealt with
 }
 
 // Security Agent definition

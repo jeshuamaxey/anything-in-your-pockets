@@ -83,7 +83,10 @@ export const initializeGameState = (): GameState => {
   });
 
   // Create initial security lanes
-  const securityLaneInfo = [{id: 'lane_1', name: 'LANE 1'}, {id: 'lane_2', name: 'LANE 2'}];
+  const securityLaneInfo = [
+    {id: 'lane_1', name: 'LANE 1'},
+    // {id: 'lane_2', name: 'LANE 2'}
+  ];
   const securityLanes: SecurityLane[] = securityLaneInfo.map((info, index) => ({
     id: info.id,
     name: info.name,

@@ -23,3 +23,7 @@ export const BODY_SCANNER_WAITING_CAPACITY = 1; // NOT_USED::Maximum number of p
 export const BODY_SCANNER_SCANNING_CAPACITY = 1; // Maximum number of people that can be scanned simultaneously
 
 export const PROPORTION_OF_PASSENGERS_WITH_BAGS = 0.8; // chance per spawned passenger
+
+export const BAG_HAS_ELECTRONICS_PROPORTION = 0.7; // chance per bag
+export const BAG_HAS_LIQUIDS_PROPORTION = 0.3; // chance per bag
+export const BAG_SUSPICIOUS_ITEM_PROPORTION = 0.1; // chance per bag

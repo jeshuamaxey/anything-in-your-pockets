@@ -4,33 +4,38 @@ import LabelProgressBar from './LabelProgressBar';
 
 interface BagLabelProps {
   bag: Bag;
-  onClick?: (bag: Bag) => void;
   showProgress?: boolean;
   progress?: number;
   annotation?: string;
+  suspicionIndicator?: boolean;
+  onClick?: (bag: Bag) => void;
 }
 
 export const BagLabel = ({
   bag,
-  onClick,
   showProgress = false,
   progress = 0,
-  annotation = ''
+  annotation = '',
+  suspicionIndicator = false,
+  onClick,
 }: BagLabelProps) => {
   const handleClick = () => {
-    if (onClick) {
+    if (suspicionIndicator && onClick) {
       onClick(bag);
     }
   };
 
   return (
-    <div className="bg-white rounded w-full">
+    <div className="bg-white rounded w-full"
+      onClick={handleClick}
+      >
       <div 
         className={`w-full text-[11px] flex items-center justify-between gap-1 px-1 ${onClick ? 'cursor-pointer hover:bg-gray-50' : ''}`}
-        onClick={handleClick}
-        >
+      >
         <div className="flex flex-1 items-center gap-2">
           <span className="font-mono">💼 {bag.id.slice(-3)}</span>
+          {suspicionIndicator && !bag.suspicion_dealt_with && <span className="text-xs text-red-500">🚨</span>}
+          {suspicionIndicator && bag.suspicion_dealt_with && <span className="text-xs text-green-500">✅</span>}
         </div>
         {showProgress && <LabelProgressBar progress={progress} color="blue" />}
         {annotation && <span className="text-xs text-gray-500">{annotation}</span>}

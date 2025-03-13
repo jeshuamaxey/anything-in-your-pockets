@@ -16,6 +16,10 @@ const SystemStatusColumn = ({
   setSelectedPassenger,
   selectedPassenger
   }: SystemStatusColumnProps) => {
+    const completedPassengersWithBags = gameState.completed.filter(p => !!p.bag);
+    const bagsWithSuspiciousItems = completedPassengersWithBags.filter(p => p.bag?.has_suspicious_item).map(p => p.bag);
+    const suspiciousItemsInvestigated = bagsWithSuspiciousItems.filter(bag => bag?.suspicion_dealt_with).length;
+
   return <>
     {/* System Status */}
     <h2 className="text-lg font-bold mb-3">SYSTEM STATUS</h2>
@@ -27,6 +31,11 @@ const SystemStatusColumn = ({
     
     <div className="grid grid-cols-1 gap-2 mb-4">
       <div className="p-2 bg-gray-50 rounded">Completed Passengers: {gameState.completed.length}</div>
+    </div>
+    <div className="grid grid-cols-1 gap-2 mb-4">
+      <div className="p-2 bg-gray-50 rounded">completedPassengersWithBags: {completedPassengersWithBags.length}</div>
+      <div className="p-2 bg-gray-50 rounded">bagsWithSuspiciousItems: {bagsWithSuspiciousItems.length}</div>
+      <div className="p-2 bg-gray-50 rounded">suspiciousItemsInvestigated: {suspiciousItemsInvestigated}</div>
     </div>
     
     <div className="text-sm max-h-32 overflow-y-auto bg-gray-50 p-2 rounded">

@@ -1,6 +1,6 @@
 import { nationalities, Nationality } from "@/game-data/nationalities";
 import { Bag, Passenger } from "@/types/gameTypes";
-import { PROPORTION_OF_PASSENGERS_WITH_BAGS } from "./game-constants";
+import { BAG_HAS_ELECTRONICS_PROPORTION, BAG_HAS_LIQUIDS_PROPORTION, BAG_SUSPICIOUS_ITEM_PROPORTION, PROPORTION_OF_PASSENGERS_WITH_BAGS } from "./game-constants";
 
 // Generate a random passenger
 export const generateRandomPassenger = (id: string): Passenger => {
@@ -31,9 +31,10 @@ export const generateRandomBag = (passengerId: string, passengerName: string): B
     id: `bag_${passengerId.substring('passenger_'.length)}`, // Use the full passenger ID to ensure uniqueness
     passenger_id: passengerId,
     passenger_name: passengerName,
-    has_electronics: Math.random() > 0.3,
-    has_suspicious_item: Math.random() > 0.9,
-    has_liquids: Math.random() > 0.7,
+    has_electronics: Math.random() < BAG_HAS_ELECTRONICS_PROPORTION,
+    has_suspicious_item: Math.random() < BAG_SUSPICIOUS_ITEM_PROPORTION,
+    has_liquids: Math.random() < BAG_HAS_LIQUIDS_PROPORTION,
+    suspicion_dealt_with: false,
     is_being_scanned: false,
     is_flagged: false,
     scan_complete: false,

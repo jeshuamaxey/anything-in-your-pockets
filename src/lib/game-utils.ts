@@ -83,7 +83,16 @@ export const calculateDuration = (start?: number, end?: number) => {
 // Format duration for display
 export const formatDuration = (durationSeconds: number) => {
   if (durationSeconds === 0) return 'N/A';
-  return `${durationSeconds.toFixed(1)}s`;
+  const seconds = durationSeconds % 60;
+  const minutes = Math.floor(durationSeconds / 60);
+  
+  const mm = minutes.toString().padStart(2, '0');
+  const ss = seconds.toFixed(0).toString().padStart(2, '0');
+
+  if (minutes > 0) {
+    return `${mm}:${ss}`;
+  }
+  return `${ss}s`;
 };
 
 // Generate a random number from a normal distribution

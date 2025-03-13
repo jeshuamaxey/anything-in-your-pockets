@@ -51,7 +51,21 @@ export interface Bag {
   is_flagged: boolean; // Whether the bag has been flagged for inspection
   scan_complete: boolean; // Whether the bag has completed scanning
   is_unloaded: boolean; // Whether the bag has been unloaded onto the scanner belt
-  suspicion_dealt_with: boolean; // Whether the bag's suspicious item has been dealt with
+  suspicious_item_dealt_with: boolean; // Whether the bag's suspicious item has been dealt with
+  electronics_alert_dealt_with: boolean; // Whether the bag's electronics alert has been dealt with
+  liquids_alert_dealt_with: boolean; // Whether the bag's liquids alert has been dealt with
+}
+
+export interface SecurityPolicy {
+  bags: {
+    liquids_must_be_in_clear_plastic_bag: boolean;
+    liquids_max_volume: number;
+
+    electronics_must_be_separate: boolean;
+  }
+  bodies: {
+    shoes_must_be_removed: boolean;
+  }
 }
 
 // Security Agent definition
@@ -181,7 +195,12 @@ export interface Scanner<T extends {id: string}> {
   items_per_minute: number; // Number of items that can be processed per minute
   current_items: Queue<T>; // Items currently being scanned
   current_scan_progress: Record<string, number>; // Progress of current scans (0-100%) by item ID
-  scan_accuracy: number; // Accuracy of the scanner (0-100%)
+  response_rates: {
+    p_alert_given_sus_item: number;
+    p_alert_given_no_sus_item: number;
+    p_alert_given_electronics: number;
+    p_alert_given_liquids: number;
+  }
   last_processed_time: number; // Last time the scanner processed items (in ms)
   waiting_items: Queue<T>; // IDs of items waiting to be scanned
   current_scan_time_needed?: Record<string, number>; // Time needed to complete scan for each item (in seconds)
@@ -225,6 +244,8 @@ export interface GameState {
   security_agents: SecurityAgent[];
   security_lanes: SecurityLane[]; // Array of security lanes
   main_queue: Queue<Passenger>; // Main queue of passengers waiting to be assigned to a lane
+  security_policy: SecurityPolicy;
+
   completed: Passenger[]; // Passengers that have completed security
   rejected: Passenger[]; // Passengers that have been rejected
   time: number; // Game time in seconds

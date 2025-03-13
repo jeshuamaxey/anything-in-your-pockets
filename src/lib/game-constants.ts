@@ -9,7 +9,7 @@ export const MAX_QUEUE_DISPLAY_LENGTH = 10; // Maximum number of passengers to d
 
 export const UNLOADING_ASSISTANCE_THRESHOLD = 15; // seconds
 
-export const MAIN_LINE_CAPACITY = 10; // Maximum number of passengers in the security queue
+export const MAIN_LINE_CAPACITY = 1000; // Maximum number of passengers in the security queue
 export const LANE_LINE_CAPACITY = 10; // Maximum number of passengers in a security lane queue
 export const BAG_DROP_LINE_CAPACITY = 6; // Maximum number of bags in the bag queue
 export const BAG_DROP_UNLOAD_CAPACITY = 3; // Maximum number of bags in the bag queue
@@ -26,4 +26,4 @@ export const PROPORTION_OF_PASSENGERS_WITH_BAGS = 0.8; // chance per spawned pas
 
 export const BAG_HAS_ELECTRONICS_PROPORTION = 0.7; // chance per bag
 export const BAG_HAS_LIQUIDS_PROPORTION = 0.3; // chance per bag
-export const BAG_SUSPICIOUS_ITEM_PROPORTION = 0.1; // chance per bag
+export const BAG_SUSPICIOUS_ITEM_PROPORTION = 0.99; // chance per bag

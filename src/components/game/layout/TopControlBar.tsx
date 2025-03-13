@@ -24,7 +24,7 @@ const TopControlBar = ({
   const [systemStatsOpen, setSystemStatsOpen] = useState(false);
 
   return (
-    <div className="flex justify-between items-center border-b border-gray-300 p-2">
+    <div className="flex justify-between items-center border-b border-border p-2">
       <div className="text-xs py-1 font-['Press_Start_2P'] text-blue-800">
         ANYTHING IN<br className="md:hidden" /> YOUR POCKETS?
       </div>

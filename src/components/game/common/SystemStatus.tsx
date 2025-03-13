@@ -3,8 +3,8 @@ import { PassengerLabel } from "../common/PassengerLabel";
 import { GameState } from "@/types/gameTypes";
 import { Passenger } from "@/types/gameTypes";
 import { Button } from "@/components/ui/button";
-import { calculateDuration, formatDuration } from "@/lib/game-utils";
-import JourneyBarChart from "../security/JourneyBarChart";
+import StatCard from "./StatCard";
+import PassengerInfo from "./PassengerInfo";
 interface SystemStatusUIProps {
   gameState: GameState;
   setGameState: (gameState: GameState) => void;
@@ -16,7 +16,8 @@ const SystemStatus = ({
   }: SystemStatusUIProps) => {
     const completedPassengersWithBags = gameState.completed.filter(p => !!p.bag);
     const bagsWithSuspiciousItems = completedPassengersWithBags.filter(p => p.bag?.has_suspicious_item).map(p => p.bag);
-    const suspiciousItemsInvestigated = bagsWithSuspiciousItems.filter(bag => bag?.suspicion_dealt_with).length;
+    const suspiciousItemsInvestigated = bagsWithSuspiciousItems.filter(bag => bag?.suspicious_item_dealt_with).length;
+    const avTime = gameState.completed.reduce((acc, passenger) => acc + ((passenger.security_cleared_timestamp || 0) - (passenger.spawned_timestamp || 0)), 0) / ( gameState.completed.length * 1000 );
 
     const selectedPassenger = gameState.selected_passenger;
     const setSelectedPassenger = (passenger: Passenger | null) => {
@@ -26,102 +27,49 @@ const SystemStatus = ({
 
   return <>
     {/* System Status */}
-    <h2 className="text-lg font-bold mb-3">SYSTEM STATUS</h2>
+    <h2 className="text font-bold p-2 border-b border-border">SYSTEM STATUS</h2>
     
     {/* Histogram */}
-    <div className="mb-4 h-64 bg-white">
+    <div className="mb-4 h-64 bg-white border-b border-border">
       <Histogram {...gameState} />
     </div>
     
-    <div className="grid grid-cols-1 gap-2 mb-4">
-      <div className="p-2 bg-gray-50 rounded">Completed Passengers: {gameState.completed.length}</div>
+    <div className="grid grid-cols-2 gap-2 p-2 mb-4">
+      <StatCard title="Passengers processed" value={gameState.completed.length} />
+      <StatCard title="Passengers with bags" value={completedPassengersWithBags.length} />
+      <StatCard title="Suspicious items detected" value={suspiciousItemsInvestigated/bagsWithSuspiciousItems.length} percentage />
+      <StatCard title="Av time" value={avTime} duration />
     </div>
-    <div className="grid grid-cols-1 gap-2 mb-4">
-      <div className="p-2 bg-gray-50 rounded">completedPassengersWithBags: {completedPassengersWithBags.length}</div>
-      <div className="p-2 bg-gray-50 rounded">bagsWithSuspiciousItems: {bagsWithSuspiciousItems.length}</div>
-      <div className="p-2 bg-gray-50 rounded">suspiciousItemsInvestigated: {suspiciousItemsInvestigated}</div>
+
+    <div className="flex flex-row justify-between items-center p-2 border-t border-b border-border">
+      <h2 className="text font-bold">
+        {selectedPassenger ? selectedPassenger.emoji + " " + selectedPassenger.name : "RECENT PASSENGERS"}
+      </h2>
+      {selectedPassenger && (
+        <Button variant="ghost" size="sm" onClick={() => setSelectedPassenger(null)} className="h-4 px-2 py-0 text-xs">
+          &times;
+        </Button>
+      )}
     </div>
     
-    <div className="text-sm max-h-32 overflow-y-auto bg-gray-50 p-2 rounded">
-      {gameState.completed.slice(-5).map((passenger, idx) => (
-        <div key={`${passenger.id}-completed-${idx}`} className="text-xs flex justify-between items-center py-1 border-b border-gray-100 last:border-0">
-          <PassengerLabel 
-            passenger={passenger} 
-            onClick={setSelectedPassenger}
-          />
-        </div>
-      ))}
-      {gameState.completed.length > 5 && <div className="text-gray-500">...and {gameState.completed.length - 5} more</div>}
-    </div>
+    {!selectedPassenger && (
+      <div className="text-sm max-h-48 overflow-y-auto bg-gray-50 p-2 rounded">
+        {gameState.completed.slice(-5).map((passenger, idx) => (
+          <div key={`${passenger.id}-completed-${idx}`} className="text-xs flex justify-between items-center py-1 border-b border-gray-100 last:border-0">
+            <PassengerLabel 
+              passenger={passenger} 
+              onClick={setSelectedPassenger}
+            />
+          </div>
+        ))}
+        {gameState.completed.length > 5 && <div className="text-gray-500">...and {gameState.completed.length - 5} more</div>}
+      </div>
+    )}
 
     {/* Passenger Journey Info (when selected) */}
     {selectedPassenger && (
-      <div className="mt-4 border-t border-gray-200 pt-4">
-        <div className="flex justify-between">
-          <h3 className="font-bold text-base mb-2">{selectedPassenger.name}&apos;s Journey</h3>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => setSelectedPassenger(null)}
-            className="h-7 px-2 py-0 text-xs"
-            >
-            &times;
-          </Button>
-        </div>
-        
-        {/* Passenger Info */}
-        <div className="mb-3">
-          <div className="text-xs mb-1"><span className="font-medium">Nationality:</span> {selectedPassenger.nationality.emoji}</div>
-          <div className="text-xs mb-1"><span className="font-medium">Security Familiarity:</span> {selectedPassenger.security_familiarity}/10</div>
-          <div className="text-xs mb-1"><span className="font-medium">Has Bag:</span> {selectedPassenger.has_bag ? 'Yes' : 'No'}</div>
-        </div>
-        
-        {/* Journey Bar Chart */}
-        <div className="mb-3">
-          <JourneyBarChart passenger={selectedPassenger} />
-        </div>
-        
-        {/* Detailed Timeline */}
-        <div className="space-y-1 text-xs">
-          <div className="grid grid-cols-2 gap-1 p-1 bg-blue-50 rounded">
-            <div><span className="font-medium">Main Queue Wait:</span></div>
-            <div>{formatDuration(calculateDuration(selectedPassenger.spawned_timestamp, selectedPassenger.security_lane_queue_assigned_timestamp))}</div>
-          </div>
-          
-          {selectedPassenger.has_bag && (
-            <>
-              <div className="grid grid-cols-2 gap-1 p-1 bg-green-50 rounded">
-                <div><span className="font-medium">Bag Unload:</span></div>
-                <div>{formatDuration(calculateDuration(selectedPassenger.bag_unload_started_timestamp, selectedPassenger.bag_unload_completed_timestamp))}</div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-1 p-1 bg-yellow-50 rounded">
-                <div><span className="font-medium">Bag Scan:</span></div>
-                <div>{formatDuration(calculateDuration(selectedPassenger.bag_scanner_started_timestamp, selectedPassenger.bag_scanner_complete_timestamp))}</div>
-              </div>
-            </>
-          )}
-          
-          <div className="grid grid-cols-2 gap-1 p-1 bg-purple-50 rounded">
-            <div><span className="font-medium">Body Scanner Queue:</span></div>
-            <div>{formatDuration(calculateDuration(selectedPassenger.body_scanner_queue_joined_timestamp, selectedPassenger.body_scanner_started_timestamp))}</div>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-1 p-1 bg-red-50 rounded">
-            <div><span className="font-medium">Body Scan:</span></div>
-            <div>{formatDuration(calculateDuration(selectedPassenger.body_scanner_started_timestamp, selectedPassenger.body_scanner_finished_timestamp))}</div>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-1 p-1 bg-orange-50 rounded">
-            <div><span className="font-medium">Waiting for Bag:</span></div>
-            <div>{formatDuration(calculateDuration(selectedPassenger.waiting_for_bag_started_timestamp, selectedPassenger.waiting_for_bag_finished_timestamp))}</div>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-1 p-1 bg-gray-100 rounded mt-2">
-            <div><span className="font-medium">Total Time:</span></div>
-            <div>{formatDuration(calculateDuration(selectedPassenger.spawned_timestamp, selectedPassenger.security_cleared_timestamp))}</div>
-          </div>
-        </div>
+      <div className="p-2"> 
+        <PassengerInfo passenger={selectedPassenger} />
       </div>
     )}
     </>

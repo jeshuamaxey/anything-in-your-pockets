@@ -67,6 +67,34 @@ export const initializeGameState = (): GameState => {
     }
   ];
 
+
+  const scannerResponseRates: Scanner<Bag>["response_rates"][] = [{
+    p_alert_given_sus_item: 0.90,
+    p_alert_given_no_sus_item: 0.1,
+    p_alert_given_electronics: 0.9,
+    p_alert_given_liquids: 0.9
+  },{
+    p_alert_given_sus_item: 0.93,
+    p_alert_given_no_sus_item: 0.08,
+    p_alert_given_electronics: 0.8,
+    p_alert_given_liquids: 0.8
+  },{
+    p_alert_given_sus_item: 0.95,
+    p_alert_given_no_sus_item: 0.06,
+    p_alert_given_electronics: 0.7,
+    p_alert_given_liquids: 0.7
+  },{
+    p_alert_given_sus_item: 0.98,
+    p_alert_given_no_sus_item: 0.05,
+    p_alert_given_electronics: 0.5,
+    p_alert_given_liquids: 0.5
+  },{
+    p_alert_given_sus_item: 0.99,
+    p_alert_given_no_sus_item: 0.05,
+    p_alert_given_electronics: 0.3,
+    p_alert_given_liquids: 0.3
+  }]
+
   // Create initial scanners
   const createScanner = <T extends {id: string}>(id: string, name: string, type: 'bag' | 'person'): Scanner<T> => ({
     id,
@@ -76,7 +104,7 @@ export const initializeGameState = (): GameState => {
     items_per_minute: type === 'bag' ? 10 : 0, // Only used for bag scanners now
     current_items: new Queue<T>({capacity: type === 'bag' ? BAG_SCANNER_SCANNING_CAPACITY : BODY_SCANNER_SCANNING_CAPACITY, id: `current_items_${id}`, debug: true}),
     current_scan_progress: {},
-    scan_accuracy: 95,
+    response_rates: scannerResponseRates[0],
     last_processed_time: Date.now(),
     waiting_items: new Queue<T>({capacity: type === 'bag' ? BAG_SCANNER_WAITING_CAPACITY : BODY_SCANNER_WAITING_CAPACITY, id: `waiting_items_${id}`, debug: true}),
     current_scan_time_needed: {},
@@ -118,6 +146,16 @@ export const initializeGameState = (): GameState => {
     security_agents: securityAgents,
     security_lanes: securityLanes,
     main_queue: new Queue({capacity: MAIN_LINE_CAPACITY, id: 'main_queue'}),
+    security_policy: {
+      bags: {
+        liquids_must_be_in_clear_plastic_bag: true,
+        liquids_max_volume: 100,
+        electronics_must_be_separate: true,
+      },
+      bodies: {
+        shoes_must_be_removed: true,
+      }
+    },
     completed: [],
     rejected: [],
     time: 0,
@@ -130,7 +168,8 @@ export const initializeGameState = (): GameState => {
     game_start_time: null,
     game_over_time: null,
 
-    selected_passenger: null
+    selected_passenger: null,
+    selected_lane: null,
   };
 };
 

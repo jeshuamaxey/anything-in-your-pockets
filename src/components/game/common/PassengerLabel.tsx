@@ -22,19 +22,19 @@ export const PassengerLabel = ({
   };
 
   return (
-    <div className="bg-white rounded">
-      <div 
-        className={`w-full text-[11px] flex flex-col px-1 ${onClick ? 'cursor-pointer hover:bg-gray-50' : ''}`}
-        onClick={handleClick}
-        >
-        <div className="flex items-center gap-1 justify-between">
-          <span className="font-mono flex-1">
-            {passenger.emoji} {passenger.id.slice(-3)}
-            {passenger.has_bag ? <span title="Has bags"> 🧳</span> : null}
-          </span>
-          {showProgress && <LabelProgressBar progress={progress} color="green" />}
-        </div>
+    <div 
+      className={`
+        w-full text-xs flex flex-col px-1
+        ${onClick ? 'cursor-pointer hover:bg-gray-50' : ''}
+        `}
+      onClick={handleClick}
+      >
+      <div className="flex gap-1 justify-between font-mono flex-1">
+        {passenger.emoji} {passenger.id.slice(-3)}
+        {passenger.has_bag ? <span title="Has bags"> 🧳</span> : null}
+        {showProgress && <LabelProgressBar progress={progress} color="green" />}
       </div>
     </div>
+
   );
 }; 

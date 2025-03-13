@@ -57,7 +57,7 @@ const JourneyBarChart = ({ passenger }: { passenger: Passenger }) => {
       <div className="mb-2 text-sm font-medium">Journey Time Breakdown</div>
       
       {/* Stacked bar chart */}
-      <div className="h-10 w-full flex rounded-md overflow-hidden">
+      <div className="h-4 w-full flex rounded-md overflow-hidden">
         {phases.map((phase, index) => {
           const widthPercent = (phase.duration / totalTime) * 100;
           return (
@@ -84,8 +84,6 @@ const JourneyBarChart = ({ passenger }: { passenger: Passenger }) => {
           </div>
         ))}
       </div>
-      
-      <div className="mt-3 text-sm">Total journey time: {totalTime.toFixed(1)} seconds</div>
     </div>
   );
 };

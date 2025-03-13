@@ -29,9 +29,9 @@ export const Histogram = (gameState: GameState) => {
   };
   
   return (
-    <div className="flex flex-col h-full bg-slate-900">
+    <div className="flex flex-col h-full bg-background">
       <div className="flex flex-col">
-        <div className="text-xs text-slate-50 font-mono p-1">Processing rate (passengers / {HISTOGRAM_INTERVAL}s)</div>
+        <div className="text-xs text-foreground font-mono p-1">Processing rate (passengers/{HISTOGRAM_INTERVAL}s)</div>
       </div>
       <div className="flex items-end h-[250px] relative flex-grow">        
         {/* Bars */}
@@ -39,7 +39,7 @@ export const Histogram = (gameState: GameState) => {
           {histogramEntries.map(([, count], index) => (
             <div key={index} className="flex flex-col items-center flex-shrink-0">
               <div 
-                className={`w-4 ${index === 0 ? 'bg-green-500/50' : 'bg-green-500'}`}
+                className={`w-4 ${index === 0 ? 'bg-green-500/50 animate-pulse' : 'bg-green-500'}`}
                 style={{ height: `${getBarHeight(count as number)}px` }}
               >
                 <div className="text-white text-xs text-center font-bold">

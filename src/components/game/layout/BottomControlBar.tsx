@@ -1,6 +1,6 @@
 const BottomControlBar = () => {
   return (
-    <div className="border-t border-gray-300 p-2 flex justify-between items-center">
+    <div className="border-t border-border p-2 flex justify-between items-center">
       <div>
         <p className="text-xs font-['Press_Start_2P'] text-blue-800">
           ANYTHING IN YOUR POCKETS?

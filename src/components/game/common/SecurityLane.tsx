@@ -3,6 +3,7 @@ import { GameState, Passenger, SecurityLane } from "@/types/gameTypes";
 import { PassengerLabel } from '../common/PassengerLabel';
 import { BagLabel } from '../common/BagLabel';
 import SecurityLaneZoneHeading from '../common/SecurityLaneZoneHeading';
+import { scanBag } from "@/lib/bag-scanning";
 
 interface SecurityLaneProps {
   lane: SecurityLane;
@@ -22,7 +23,7 @@ const SecurityLaneUI = ({lane, gameState, setGameState}: SecurityLaneProps) => {
   }
 
   return (
-    <div className="col-span-1 border first:border-t-0 border-l-0 border-b-0 border-gray-300">
+    <div className="col-span-1">
       {/* Header */}
       <div className="flex justify-between items-center mb-0 p-2">
         <div className="flex gap-2 items-center" onClick={() => debugLane(lane)}>
@@ -34,11 +35,11 @@ const SecurityLaneUI = ({lane, gameState, setGameState}: SecurityLaneProps) => {
       </div>
       
       {/* Lane layout based on wireframe - 2 rows, 4 columns with arrows */}
-      <div className="flex flex-col gap-0 p-2 pt-0 relative">
+      <div className="flex flex-col gap-0 pt-0 relative">
         {/* Top Row - Passenger Flow */}
         <div className="grid grid-cols-4 gap-0 h-[200px]">
           {/* Lane Line */}
-          <div className="bg-gray-100 p-2 h-full border-l border-t border-r border-gray-300">
+          <div className="bg-background p-2 h-full border-t border-r border-border">
             <SecurityLaneZoneHeading title="Lane line" nItems={lane.lane_line.length} capacity={lane.lane_line.capacity} />
 
             <div className="overflow-y-auto h-[120px]">
@@ -60,7 +61,7 @@ const SecurityLaneUI = ({lane, gameState, setGameState}: SecurityLaneProps) => {
           </div>
 
           {/* Body Scanner Line */}
-          <div className="bg-gray-100 p-2 h-full border-t border-gray-300">
+          <div className="bg-background p-2 h-full border-t border-border">
             <SecurityLaneZoneHeading 
               title="Body scanner line"
               nItems={lane.body_scan_line.length}
@@ -84,7 +85,7 @@ const SecurityLaneUI = ({lane, gameState, setGameState}: SecurityLaneProps) => {
           </div>
 
           {/* Body Scanner */}
-          <div className="bg-gray-100 p-2 h-full border-t border-gray-300">
+          <div className="bg-background p-2 h-full border-t border-border">
             <SecurityLaneZoneHeading 
               title="Body scanner"
               nItems={lane.body_scanner.current_items.length}
@@ -110,7 +111,7 @@ const SecurityLaneUI = ({lane, gameState, setGameState}: SecurityLaneProps) => {
           </div>
 
           {/* Bag Pickup */}
-          <div className="bg-gray-100 p-2 h-full border-t border-gray-300">
+          <div className="bg-background p-2 h-full border-t border-border">
             <SecurityLaneZoneHeading 
               title="Bag pickup"
               nItems={lane.bag_pickup_area.length}
@@ -137,7 +138,7 @@ const SecurityLaneUI = ({lane, gameState, setGameState}: SecurityLaneProps) => {
         {/* Bottom Row - Bag Flow */}
         <div className="grid grid-cols-4 gap-0 h-[200px]">
           {/* Bag Drop Line */}
-          <div className="bg-gray-100 p-2 h-full border-l border-b border-gray-300">
+          <div className="bg-background p-2 h-full border-b border-border">
             <SecurityLaneZoneHeading 
               title="Bag drop line"
               nItems={lane.bag_drop_line.length}
@@ -161,7 +162,7 @@ const SecurityLaneUI = ({lane, gameState, setGameState}: SecurityLaneProps) => {
           </div>
 
           {/* Bag Drop */}
-          <div className="bg-gray-100 p-2 h-full border-b border-gray-300">
+          <div className="bg-background p-2 h-full border-b border-border">
             <SecurityLaneZoneHeading 
               title="Bag drop"
               nItems={lane.bag_drop_unload.length}
@@ -187,7 +188,7 @@ const SecurityLaneUI = ({lane, gameState, setGameState}: SecurityLaneProps) => {
           </div>
 
           {/* Bag Scanner */}
-          <div className="bg-blue-50 p-2 h-full border-l border-t border-b border-gray-300">
+          <div className="bg-blue-50 p-2 h-full border-l border-t border-b border-border">
             <SecurityLaneZoneHeading 
               title="Bag scanner"
               nItems={lane.bag_scanner.current_items.length}
@@ -197,13 +198,20 @@ const SecurityLaneUI = ({lane, gameState, setGameState}: SecurityLaneProps) => {
               {lane.bag_scanner.current_items.length + lane.bag_scanner.waiting_items.length > 0 ? (
                 <div className="space-y-1">
                   {lane.bag_scanner.current_items.getAll().map(bag => {
+                    const alerts = scanBag(bag, lane.bag_scanner, gameState.security_policy);
+
                     return <BagLabel
                       key={bag.id}
                       bag={bag}
                       showProgress={bag.is_being_scanned}
                       progress={lane.bag_scanner.current_scan_progress[bag.id]}
-                      suspicionIndicator
-                      onClick={() => bag.suspicion_dealt_with = true}
+                      showAlerts
+                      alerts={alerts}
+                      onClick={() => {
+                        bag.suspicious_item_dealt_with = true;
+                        bag.electronics_alert_dealt_with = true;
+                        bag.liquids_alert_dealt_with = true;
+                      }}
                     />
                   })}
                   {lane.bag_scanner.waiting_items.getAll().map(bag => {
@@ -221,7 +229,7 @@ const SecurityLaneUI = ({lane, gameState, setGameState}: SecurityLaneProps) => {
           </div>
 
           {/* Bag Off Ramp */}
-          <div className="bg-blue-50 p-2 h-full border-r border-b border-gray-300">
+          <div className="bg-blue-50 p-2 h-full border-b border-border">
             <SecurityLaneZoneHeading 
               title="Bag off ramp"
               nItems={lane.bag_scanner_off_ramp.length}

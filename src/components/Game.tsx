@@ -137,7 +137,7 @@ const Game = () => {
       {/* Main content area - fills remaining height */}
       <div className="flex flex-col md:flex-row flex-1 min-h-0"> {/* min-h-0 is crucial for nested flex scrolling */}
         {/* Left Column - Security Queue */}
-        <div className="w-full md:w-1/5 border-r border-gray-300 overflow-y-auto">
+        <div className="w-full md:w-1/5 border-r border-border overflow-y-auto">
           <SecurityQueue
             gameState={gameState} 
             setGameState={setGameState}
@@ -153,7 +153,7 @@ const Game = () => {
         </div>
 
         {/* Right Column - System Status */}
-        <div className="hidden md:block w-1/5 border-l border-gray-300 overflow-y-auto p-2">
+        <div className="hidden md:block w-1/5 border-l border-border overflow-y-auto">
           <SystemStatus 
             gameState={gameState}
             setGameState={setGameState}

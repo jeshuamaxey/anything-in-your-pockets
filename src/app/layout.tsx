@@ -1,3 +1,4 @@
+import { Analytics } from "@vercel/analytics/react"
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Inter, Press_Start_2P } from "next/font/google";
@@ -37,6 +38,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} ${pressStart2P.variable} ${inter.className} antialiased`}
       >
         {children}
+        <Analytics />
       </body>
     </html>
   );

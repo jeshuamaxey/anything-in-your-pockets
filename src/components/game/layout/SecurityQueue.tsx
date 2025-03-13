@@ -26,9 +26,16 @@ const SecurityQueue = ({
     assignPassengerToLane(gameState, setGameState, passengerId, laneId);
   };
 
+  const handleAssignNextPassengerInQueue = (laneId: string) => {
+    const nextPassenger = gameState.main_queue.peek();
+    if (nextPassenger) {
+      handleAssignPassenger(nextPassenger.id, laneId);
+    }
+  }
+
   return <>
     <div className="p-2 border-b border-gray-300">
-      <div className="flex flex-row justify-between items-center md:flex-col md:items-start">
+      <div className="flex flex-row justify-between items-center md:flex-col md:items-start md:gap-3">
         <h2 className="text-lg font-bold">SECURITY QUEUE</h2>
         
         {/* Queue Capacity Progress Bar */}
@@ -48,6 +55,24 @@ const SecurityQueue = ({
               style={{ width: `${Math.min((gameState.main_queue.length / MAIN_LINE_CAPACITY) * 100, 100)}%` }}
             ></div>
           </div>
+        </div>
+
+        <div className="md:w-full flex flex-row gap-1 items-center">
+          <p className="text-xs font-bold">Assign: </p>
+          {gameState.security_lanes.slice(0, 2).map(lane => {
+            const laneIsDisabled = lane.lane_line.length >= LANE_LINE_CAPACITY;
+            return (
+              <Button 
+                key={lane.id}
+                variant="secondary"
+                disabled={laneIsDisabled}
+                size="sm"
+                onClick={() => handleAssignNextPassengerInQueue(lane.id)}
+                className="h-6 px-2 p-1 text-xs cursor-pointer"
+              >
+                {laneIsDisabled ? '🔴' : '🟢'} {lane.name}
+              </Button>
+            )})}
         </div>
       </div>
     </div>
@@ -75,25 +100,6 @@ const SecurityQueue = ({
               passenger={passenger} 
               onClick={() => setGameState({...gameState, selected_passenger: passenger})}
             />
-            <div className="flex gap-1 items-center">
-              {/* <div className="text-xs font-semibold">Assign:</div> */}
-              <div className="flex flex-row flex-wrap gap-1">
-                {gameState.security_lanes.slice(0, 2).map(lane => {
-                  const laneIsDisabled = lane.lane_line.length >= LANE_LINE_CAPACITY;
-                  return (
-                    <Button 
-                      key={lane.id}
-                      variant="secondary"
-                      disabled={laneIsDisabled}
-                      size="sm"
-                      onClick={() => handleAssignPassenger(passenger.id, lane.id)}
-                      className="h-6 px-2 p-1 text-xs cursor-pointer"
-                    >
-                      {laneIsDisabled ? '🔴' : '🟢'} {lane.name}
-                    </Button>
-                  )})}
-              </div>
-            </div>
           </motion.div>
         ))}
       </AnimatePresence>

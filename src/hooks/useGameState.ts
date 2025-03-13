@@ -85,7 +85,7 @@ export const initializeGameState = (): GameState => {
   // Create initial security lanes
   const securityLaneInfo = [
     {id: 'lane_1', name: 'LANE 1'},
-    // {id: 'lane_2', name: 'LANE 2'}
+    {id: 'lane_2', name: 'LANE 2'}
   ];
   const securityLanes: SecurityLane[] = securityLaneInfo.map((info, index) => ({
     id: info.id,
@@ -128,7 +128,9 @@ export const initializeGameState = (): GameState => {
     queue_at_capacity_start_time: null,
     game_over: false,
     game_start_time: null,
-    game_over_time: null
+    game_over_time: null,
+
+    selected_passenger: null
   };
 };
 

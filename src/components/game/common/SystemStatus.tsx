@@ -5,20 +5,24 @@ import { Passenger } from "@/types/gameTypes";
 import { Button } from "@/components/ui/button";
 import { calculateDuration, formatDuration } from "@/lib/game-utils";
 import JourneyBarChart from "../security/JourneyBarChart";
-interface SystemStatusColumnProps {
+interface SystemStatusUIProps {
   gameState: GameState;
-  setSelectedPassenger: (passenger: Passenger | null) => void;
-  selectedPassenger: Passenger | null;
+  setGameState: (gameState: GameState) => void;
 }
 
-const SystemStatusColumn = ({
+const SystemStatus = ({
   gameState,
-  setSelectedPassenger,
-  selectedPassenger
-  }: SystemStatusColumnProps) => {
+  setGameState
+  }: SystemStatusUIProps) => {
     const completedPassengersWithBags = gameState.completed.filter(p => !!p.bag);
     const bagsWithSuspiciousItems = completedPassengersWithBags.filter(p => p.bag?.has_suspicious_item).map(p => p.bag);
     const suspiciousItemsInvestigated = bagsWithSuspiciousItems.filter(bag => bag?.suspicion_dealt_with).length;
+
+    const selectedPassenger = gameState.selected_passenger;
+    const setSelectedPassenger = (passenger: Passenger | null) => {
+      gameState.selected_passenger = passenger;
+      setGameState({...gameState, selected_passenger: passenger});
+    }
 
   return <>
     {/* System Status */}
@@ -123,4 +127,4 @@ const SystemStatusColumn = ({
     </>
 };
 
-export default SystemStatusColumn;
+export default SystemStatus;

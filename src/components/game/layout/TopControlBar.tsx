@@ -43,11 +43,14 @@ const TopControlBar = ({
         />
 
         {/* System Stats Dialog */}
-        <SystemStatsDialog 
-          systemStatsOpen={systemStatsOpen}
-          setSystemStatsOpen={setSystemStatsOpen}
-          gameState={gameState}
-        />
+        <div className="md:hidden">
+          <SystemStatsDialog
+            systemStatsOpen={systemStatsOpen}
+            setSystemStatsOpen={setSystemStatsOpen}
+            gameState={gameState}
+            setGameState={setGameState}
+            />
+        </div>
 
         {/* Error Dialog */}
         {useDebug() && (

@@ -1,22 +1,19 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { 
-  Passenger,
-} from '@/types/gameTypes';
 import TopControlBar from './game/layout/TopControlBar';
 import useGameState from '@/hooks/useGameState';
 import SecurityQueue from './game/layout/SecurityQueue';
 import { SecurityLanesColumn } from './game/layout/SecurityLanesColumn';
-import SystemStatusColumn from './game/layout/SystemStatusColumn';
+import SystemStatus from './game/common/SystemStatus';
 import { assignPassengerToLane, startGame } from '@/lib/game-logic';
 import GameOverlay from './game/layout/GameOverlay';
 import { initializeGameState } from '@/hooks/useGameState';
+import BottomControlBar from './game/layout/BottomControlBar';
 
 const Game = () => {
   const [gameState, setGameState] = useGameState()
   const gameLoopRef = useRef<NodeJS.Timeout | null>(null);
-  const [selectedPassenger, setSelectedPassenger] = useState<Passenger | null>(null);
   const [showOverlay, setShowOverlay] = useState(true);
   
   // Toggle game (start/pause) - move this before the useEffect that uses it
@@ -138,32 +135,34 @@ const Game = () => {
       </div>
 
       {/* Main content area - fills remaining height */}
-      <div className="flex flex-1 min-h-0"> {/* min-h-0 is crucial for nested flex scrolling */}
+      <div className="flex flex-col md:flex-row flex-1 min-h-0"> {/* min-h-0 is crucial for nested flex scrolling */}
         {/* Left Column - Security Queue */}
-        <div className="w-1/5 border-r border-gray-300 overflow-y-auto">
-          <SecurityQueue 
-            setSelectedPassenger={setSelectedPassenger} 
+        <div className="w-full md:w-1/5 border-r border-gray-300 overflow-y-auto">
+          <SecurityQueue
             gameState={gameState} 
             setGameState={setGameState}
           />
         </div>
 
         {/* Center Column - Security Lanes */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="w-full md:w-3/5 overflow-y-auto">
           <SecurityLanesColumn 
-            onSelectPassenger={setSelectedPassenger} 
             gameState={gameState} 
+            setGameState={setGameState}
           />
         </div>
 
         {/* Right Column - System Status */}
-        <div className="w-1/5 border-l border-gray-300 overflow-y-auto p-2">
-          <SystemStatusColumn 
-            gameState={gameState} 
-            selectedPassenger={selectedPassenger} 
-            setSelectedPassenger={setSelectedPassenger} 
+        <div className="hidden md:block w-1/5 border-l border-gray-300 overflow-y-auto p-2">
+          <SystemStatus 
+            gameState={gameState}
+            setGameState={setGameState}
           />
         </div>
+      </div>
+
+      <div className="flex-none">
+        <BottomControlBar />
       </div>
     </div>
   );

@@ -2,15 +2,18 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { GameState } from "@/types/gameTypes";
 import { ChartColumn } from "lucide-react";
+import SystemStatus from "@/components/game/common/SystemStatus";
 
 const SystemStatsDialog = ({
   systemStatsOpen,
   setSystemStatsOpen,
   gameState,
+  setGameState
 }: {
   systemStatsOpen: boolean;
   setSystemStatsOpen: (open: boolean) => void;
   gameState: GameState;
+  setGameState: (gameState: GameState) => void;
 }) => {
 
   return (
@@ -32,6 +35,7 @@ const SystemStatsDialog = ({
             System stats
           </DialogDescription>
         </DialogHeader>
+        <SystemStatus gameState={gameState} setGameState={setGameState} />
       </DialogContent>
     </Dialog>
   );  

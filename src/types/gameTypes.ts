@@ -238,4 +238,7 @@ export interface GameState {
   game_over_time: number | null; // Last time the game was over (in ms)
   queue_at_capacity_start_time: number | null; // Last time the queue was at capacity (in ms)
   game_over: boolean; // Whether the game is over
+
+  selected_passenger: Passenger | null; // The passenger that is currently selected
+  selected_lane: string | null; // The lane that is currently selected
 }

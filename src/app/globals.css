@@ -56,6 +56,78 @@
   }
 }
 
+@keyframes flash-bg-red {
+  0%, 100% {
+    background: linear-gradient(
+      -45deg,
+      transparent 0%,
+      transparent 35%,
+      oklch(from var(--color-red-500) l c h / 0.1) 35%,
+      oklch(from var(--color-red-500) l c h / 0.4) 45%,
+      oklch(from var(--color-red-500) l c h / 0.5) 50%,
+      oklch(from var(--color-red-500) l c h / 0.4) 55%,
+      oklch(from var(--color-red-500) l c h / 0.1) 65%,
+      transparent 65%,
+      transparent 100%
+    ) -200% -200% / 200% 200%;
+  }
+  100% {
+    background: linear-gradient(
+      -45deg,
+      transparent 0%,
+      transparent 35%,
+      oklch(from var(--color-red-500) l c h / 0.1) 35%,
+      oklch(from var(--color-red-500) l c h / 0.4) 45%,
+      oklch(from var(--color-red-500) l c h / 0.5) 50%,
+      oklch(from var(--color-red-500) l c h / 0.4) 55%,
+      oklch(from var(--color-red-500) l c h / 0.1) 65%,
+      transparent 65%,
+      transparent 100%
+    ) 200% 200% / 200% 200%;
+  }
+}
+
+@keyframes flash-bg-yellow {
+  0%, 100% {
+    background: linear-gradient(
+      -45deg,
+      transparent 0%,
+      transparent 35%,
+      oklch(from var(--color-yellow-500) l c h / 0.1) 35%,
+      oklch(from var(--color-yellow-500) l c h / 0.4) 45%,
+      oklch(from var(--color-yellow-500) l c h / 0.5) 50%,
+      oklch(from var(--color-yellow-500) l c h / 0.4) 55%,
+      oklch(from var(--color-yellow-500) l c h / 0.1) 65%,
+      transparent 65%,
+      transparent 100%
+    ) -200% -200% / 200% 200%;
+  }
+  100% {
+    background: linear-gradient(
+      -45deg,
+      transparent 0%,
+      transparent 35%,
+      oklch(from var(--color-yellow-500) l c h / 0.1) 35%,
+      oklch(from var(--color-yellow-500) l c h / 0.4) 45%,
+      oklch(from var(--color-yellow-500) l c h / 0.5) 50%,
+      oklch(from var(--color-yellow-500) l c h / 0.4) 55%,
+      oklch(from var(--color-yellow-500) l c h / 0.1) 65%,
+      transparent 65%,
+      transparent 100%
+    ) 200% 200% / 200% 200%;
+  }
+}
+
+.animate-flash-bg-red {
+  animation: flash-bg-red 2s linear infinite;
+  background-color: white;
+}
+
+.animate-flash-bg-yellow {
+  animation: flash-bg-yellow 2s linear infinite;
+  background-color: white;
+}
+
 /* Pixelated rendering for canvas and images */
 .pixelated {
   image-rendering: pixelated;

@@ -20,7 +20,6 @@ const SystemStatus = ({
     const suspiciousItemsDetected = suspiciousItemsInvestigated/bagsWithSuspiciousItems.length || 0;
     const avTime = (gameState.completed.reduce((acc, passenger) => acc + ((passenger.security_cleared_timestamp || 0) - (passenger.spawned_timestamp || 0)), 0) / ( gameState.completed.length * 1000 )) || 0;
 
-    console.log({avTime})
     const selectedPassenger = gameState.selected_passenger;
     const setSelectedPassenger = (passenger: Passenger | null) => {
       gameState.selected_passenger = passenger;

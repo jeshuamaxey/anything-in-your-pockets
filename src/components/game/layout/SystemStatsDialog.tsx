@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
 import { GameState } from "@/types/gameTypes";
 import { ChartColumn } from "lucide-react";
 import SystemStatus from "@/components/game/common/SystemStatus";

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { MAX_QUEUE_DISPLAY_LENGTH } from "@/lib/game-constants";
 import { assignPassengerToLane } from "@/lib/game-logic";
 import { motion, AnimatePresence } from "framer-motion";
+import CapacityIndicatorBar from "../common/CapacityIndicatorBar";
 
 interface SecurityQueueProps {
   gameState: GameState;
@@ -40,18 +41,12 @@ const SecurityQueue = ({
           <span className="text-xs font-normal">{gameState.main_queue.length}/{MAIN_LINE_CAPACITY}</span>
 
           <div className="min-w-16 w-full bg-gray-200 rounded-full h-2.5">
-            <div 
-              className={`h-2.5 rounded-full ${
-                (gameState.main_queue.length / MAIN_LINE_CAPACITY) * 100 < 50 ? 'bg-green-500' : 
-                (gameState.main_queue.length / MAIN_LINE_CAPACITY) * 100 < 70 ? 'bg-yellow-500' : 
-                (gameState.main_queue.length / MAIN_LINE_CAPACITY) * 100 < 90 ? 'bg-orange-500' : 
-                'bg-red-500'
-              }`}
-              style={{ width: `${Math.min((gameState.main_queue.length / MAIN_LINE_CAPACITY) * 100, 100)}%` }}
-              >
-              </div>
-            </div>
+            <CapacityIndicatorBar 
+              queueLength={gameState.main_queue.length}
+              capacity={MAIN_LINE_CAPACITY}
+            />
           </div>
+        </div>
       </div>
 
       <div className="hidden md:w-full md:flex flex-row gap-1 items-center p-2">
@@ -125,6 +120,6 @@ const SecurityQueue = ({
         )})}
     </div>
   </>
-};
+}
 
 export default SecurityQueue;

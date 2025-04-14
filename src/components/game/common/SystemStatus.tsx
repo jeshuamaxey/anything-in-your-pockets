@@ -32,7 +32,7 @@ const SystemStatus = ({
     <h2 className="text font-bold p-2 border-b border-border">SYSTEM STATUS</h2>
     
     {/* Histogram */}
-    <div className="mb-4 h-64 bg-white border-b border-border">
+    <div className="mb-4 h-32 bg-white border-b border-border">
       <Histogram {...gameState} />
     </div>
     

@@ -29,12 +29,6 @@ const SystemStatsDialog = ({
         </Button>
       </DialogTrigger>
       <DialogContent className="bg-background">
-        <DialogHeader>
-          <DialogTitle>System Stats</DialogTitle>
-          <DialogDescription>
-            System stats
-          </DialogDescription>
-        </DialogHeader>
         <SystemStatus gameState={gameState} setGameState={setGameState} />
       </DialogContent>
     </Dialog>

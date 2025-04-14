@@ -25,7 +25,7 @@ export const Histogram = (gameState: GameState) => {
   
   // Calculate the bar height based on the maximum count
   const getBarHeight = (count: number) => {
-    return Math.max(10, (count / maxCount) * 200); // Min height of 10px, max height of 200px
+    return Math.max(5, (count / maxCount) * 100); // Min height of 5%, max height of 100%
   };
   
   return (
@@ -35,12 +35,12 @@ export const Histogram = (gameState: GameState) => {
       </div>
       <div className="flex items-end h-[250px] relative flex-grow">        
         {/* Bars */}
-        <div className="flex items-end pl-8 w-full h-full gap-1 overflow-x-auto pb-6">
+        <div className="flex items-end pl-2 w-full h-full gap-1 overflow-x-auto pb-2">
           {histogramEntries.map(([, count], index) => (
-            <div key={index} className="flex flex-col items-center flex-shrink-0">
+            <div key={index} className="flex flex-col items-center h-full justify-end">
               <div 
                 className={`w-4 ${index === 0 ? 'bg-green-500/50 animate-pulse' : 'bg-green-500'}`}
-                style={{ height: `${getBarHeight(count as number)}px` }}
+                style={{ height: `${getBarHeight(count as number)}%` }}
               >
                 <div className="text-white text-xs text-center font-bold">
                   {count}

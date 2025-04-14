@@ -55,7 +55,7 @@ export const BagLabel = ({
     }
 
     return bgAnimation
-  }, [showAlerts, alerts.electronicsAlert, alerts.liquidsAlert, alerts.suspiciousItemAlert, allAlertsDealtWith])
+  }, [alerts.electronicsAlert, alerts.liquidsAlert, alerts.suspiciousItemAlert, showAlerts, anyAlert, allAlertsDealtWith])
 
   return (
     <div className={`relative bg-background ${bgAnimation} rounded w-full overflow-visible`} onClick={handleClick}>

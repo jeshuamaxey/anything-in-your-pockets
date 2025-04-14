@@ -20,43 +20,41 @@ const SecurityQueue = ({
   const getDisplayPassengers = () => {
     return gameState.main_queue.getAll().slice(0, MAX_QUEUE_DISPLAY_LENGTH); // Only show up to 5 passengers
   };
-
-  // Handle assigning passenger with sound
-  const handleAssignPassenger = (passengerId: string, laneId: string) => {
-    assignPassengerToLane(gameState, setGameState, passengerId, laneId);
-  };
-
+  
   const handleAssignNextPassengerInQueue = (laneId: string) => {
     const nextPassenger = gameState.main_queue.peek();
     if (nextPassenger) {
-      handleAssignPassenger(nextPassenger.id, laneId);
+      assignPassengerToLane(gameState, setGameState, nextPassenger.id, laneId);
     }
   }
 
   return <>
     <div className="flex flex-row justify-between items-center md:flex-col md:items-start md:gap-3">
-      <h2 className="text font-bold border-b border-border w-full p-2 ">SECURITY QUEUE</h2>
+      <h2 className="font-bold md:border-b border-border w-full p-2 ">
+        SECURITY QUEUE&nbsp;
+      </h2>
       
       {/* Queue Capacity Progress Bar */}
       <div className="md:w-full p-2">
-        <div className="flex justify-between text-xs mb-1">
-          <span>Capacity: {gameState.main_queue.length}/{MAIN_LINE_CAPACITY}</span>
-          {/* <span>{Math.round((gameState.main_queue.length / MAIN_LINE_CAPACITY) * 100)}%</span> */}
-        </div>
-        <div className="w-full bg-gray-200 rounded-full h-2.5">
-          <div 
-            className={`h-2.5 rounded-full ${
-              (gameState.main_queue.length / MAIN_LINE_CAPACITY) * 100 < 50 ? 'bg-green-500' : 
-              (gameState.main_queue.length / MAIN_LINE_CAPACITY) * 100 < 70 ? 'bg-yellow-500' : 
-              (gameState.main_queue.length / MAIN_LINE_CAPACITY) * 100 < 90 ? 'bg-orange-500' : 
-              'bg-red-500'
-            }`}
-            style={{ width: `${Math.min((gameState.main_queue.length / MAIN_LINE_CAPACITY) * 100, 100)}%` }}
-          ></div>
-        </div>
+        <div className="flex justify-between items-center gap-1  text-xs mb-1">
+          <span className="text-xs font-normal">{gameState.main_queue.length}/{MAIN_LINE_CAPACITY}</span>
+
+          <div className="min-w-16 w-full bg-gray-200 rounded-full h-2.5">
+            <div 
+              className={`h-2.5 rounded-full ${
+                (gameState.main_queue.length / MAIN_LINE_CAPACITY) * 100 < 50 ? 'bg-green-500' : 
+                (gameState.main_queue.length / MAIN_LINE_CAPACITY) * 100 < 70 ? 'bg-yellow-500' : 
+                (gameState.main_queue.length / MAIN_LINE_CAPACITY) * 100 < 90 ? 'bg-orange-500' : 
+                'bg-red-500'
+              }`}
+              style={{ width: `${Math.min((gameState.main_queue.length / MAIN_LINE_CAPACITY) * 100, 100)}%` }}
+              >
+              </div>
+            </div>
+          </div>
       </div>
 
-      <div className="md:w-full flex flex-row gap-1 items-center p-2">
+      <div className="hidden md:w-full md:flex flex-row gap-1 items-center p-2">
         <p className="text-xs font-bold">Assign: </p>
         {gameState.security_lanes.slice(0, 2).map(lane => {
           const laneIsDisabled = lane.lane_line.length >= LANE_LINE_CAPACITY;
@@ -76,7 +74,7 @@ const SecurityQueue = ({
     </div>
 
     {/* Scrollable Queue List */}
-    <div className="flex-1 h-26 flex-wrap overflow-y-auto gap-1 flex flex-row md:flex-col  md:h-auto md:max-h-[calc(100%-100px)] md:overflow-y-auto p-2">
+    <div className="flex-1 flex-wrap overflow-y-auto gap-1 flex flex-row md:flex-col  md:h-auto md:max-h-[calc(100%-100px)] md:overflow-y-auto p-2">
       <AnimatePresence>
         {getDisplayPassengers().map((passenger) => (
           <motion.div 
@@ -102,10 +100,29 @@ const SecurityQueue = ({
         ))}
       </AnimatePresence>
       {gameState.main_queue.length > MAX_QUEUE_DISPLAY_LENGTH && (
-        <div className="p-2 bg-gray-200 rounded text-sm text-center">
+        <div className="p-1 md:p-2 bg-gray-200 rounded text-xs md:text-sm text-center">
           +{gameState.main_queue.length - MAX_QUEUE_DISPLAY_LENGTH} more passengers
         </div>
       )}
+    </div>
+
+    <div className="md:hidden flex flex-row gap-1 items-center p-2">
+      {gameState.security_lanes.slice(0, 2).map(lane => {
+        const laneIsFull = lane.lane_line.length >= LANE_LINE_CAPACITY;
+        const laneIsNearFull = lane.lane_line.length >= LANE_LINE_CAPACITY * 0.8;
+        return (
+          <div key={lane.id} className="flex-1 border-border border">
+            <Button
+              variant="ghost"
+              disabled={laneIsFull}
+              size="sm"
+              onClick={() => handleAssignNextPassengerInQueue(lane.id)}
+              className="h-10 text-center w-full"
+            >
+            {laneIsFull ? '🔴' : laneIsNearFull ? '🟠' : '🟢'} {lane.name}
+            </Button>
+          </div>
+        )})}
     </div>
   </>
 };

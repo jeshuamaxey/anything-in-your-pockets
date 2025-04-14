@@ -1,7 +1,7 @@
 // Create an audio context lazily to comply with browser autoplay policies
 let audioContext: AudioContext | null = null;
-let soundFXEnabled = true;
-let ambientSoundEnabled = true;
+let soundFXEnabled = process.env.NODE_ENV === 'development' ? false : true;
+let ambientSoundEnabled = process.env.NODE_ENV === 'development' ? false : true;
 let ambientAudio: HTMLAudioElement | null = null;
 
 const AMBIENT_SOUND_FILE = '/airport-ambience.mp3'; // Placeholder filename
